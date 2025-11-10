@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PhishGuard – Локальный Dashboard</title>
+<style>
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; background: #0f1020; color: #fff; }
+  header { padding: 16px 20px; background: linear-gradient(135deg,#667eea,#764ba2); display:flex; align-items:center; gap:12px; }
+  header img { width:28px; height:28px; }
+  h1 { margin: 0; font-size: 18px; font-weight: 600; }
+  .wrap { padding: 20px; max-width: 1100px; margin: 0 auto; }
+  .grid { display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap:12px; margin-bottom: 16px; }
+  .card { background: #1a1b34; padding: 14px; border-radius: 10px; border:1px solid #26284a; }
+  .label { font-size: 12px; opacity: .8; margin-bottom: 6px; }
+  .value { font-size: 22px; font-weight: 700; }
+  .bar { height: 10px; border-radius: 6px; background: #2a2c55; overflow: hidden; }
+  .bar > div { height: 100%; }
+  .bar-allow { background: #2ecc71; }
+  .bar-warn { background: #f39c12; }
+  .bar-block { background: #e74c3c; }
+  .toolbar { display:flex; gap:10px; margin-bottom: 16px; align-items:center; }
+  button { background:#3b3ee5; color:#fff; border:none; padding:10px 14px; border-radius:8px; cursor:pointer; font-weight:600; }
+  button.secondary { background:#26284a; }
+  table { width:100%; border-collapse: collapse; }
+  th, td { padding:10px 12px; text-align:left; border-bottom:1px solid #26284a; font-size: 13px; }
+  th { position: sticky; top: 0; background:#141532; z-index:1; }
+  .tag { padding:3px 8px; border-radius: 999px; font-size: 12px; font-weight:700; display:inline-block; }
+  .tag-allow { background:#213f2d; color:#2ecc71; }
+  .tag-warn { background:#4a3a12; color:#f39c12; }
+  .tag-block { background:#4a2020; color:#e74c3c; }
+  .muted { opacity:.7; }
+  .status-dot { width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:6px; }
+  .dot-allow { background:#2ecc71; }
+  .dot-warn { background:#f39c12; }
+  .dot-block { background:#e74c3c; }
+  .table-wrap { background:#1a1b34; border:1px solid #26284a; border-radius:12px; overflow:auto; max-height: 70vh; }
+  a { color:#9fb7ff; }
+  /* Row coloring by action */
+  tr.row-allow td { background: rgba(46, 204, 113, 0.10); }
+  tr.row-warn td  { background: rgba(243, 156, 18, 0.12); }
+  tr.row-block td { background: rgba(231, 76, 60, 0.14); }
+  .legend { display:flex; gap:12px; align-items:center; margin:8px 0 4px; }
+  .legend-item { display:flex; gap:6px; align-items:center; font-size:12px; color:#9fb7ff; }
+  .legend-swatch { width:10px; height:10px; border-radius:2px; display:inline-block; }
+  canvas { display:block; max-width:100%; }
+</style>
+</head>
+<body>
+  <header>
+    <img src="icons/icon32.png" alt="logo" />
+    <h1>PhishGuard – Локальный Dashboard</h1>
+  </header>
+  <div class="wrap">
+    <div class="toolbar" style="gap:14px; flex-wrap: wrap;">
+      <button id="refresh">Обновить</button>
+      <input id="search" placeholder="Поиск по URL..." style="flex:1; min-width:240px; background:#111233; color:#fff; border:1px solid #26284a; border-radius:8px; padding:10px 12px;" />
+      <select id="actionFilter" style="background:#111233; color:#fff; border:1px solid #26284a; border-radius:8px; padding:10px 12px;">
+        <option value="">Все действия</option>
+        <option value="allow">ALLOW</option>
+        <option value="warn">WARN</option>
+        <option value="block">BLOCK</option>
+      </select>
+      <span id="api-url" class="muted"></span>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <div class="label">Всего инцидентов</div>
+        <div id="stat-total" class="value">–</div>
+      </div>
+      <div class="card">
+        <div class="label">Заблокировано</div>
+        <div id="stat-block" class="value">–</div>
+        <div class="bar"><div id="bar-block" class="bar-block" style="width:0%"></div></div>
+      </div>
+      <div class="card">
+        <div class="label">Предупреждений</div>
+        <div id="stat-warn" class="value">–</div>
+        <div class="bar"><div id="bar-warn" class="bar-warn" style="width:0%"></div></div>
+      </div>
+      <div class="card">
+        <div class="label">Разрешено</div>
+        <div id="stat-allow" class="value">–</div>
+        <div class="bar"><div id="bar-allow" class="bar-allow" style="width:0%"></div></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px;">
+      <div class="label">Тренд за последние 24 часа (по часам)</div>
+      <div class="legend">
+        <span class="legend-item"><span class="legend-swatch" style="background:#2ecc71"></span>ALLOW</span>
+        <span class="legend-item"><span class="legend-swatch" style="background:#f39c12"></span>WARN</span>
+        <span class="legend-item"><span class="legend-swatch" style="background:#e74c3c"></span>BLOCK</span>
+      </div>
+      <canvas id="trendChart" style="width:100%; height:300px;"></canvas>
+    </div>
+
+    <div class="table-wrap" style="display:grid; grid-template-columns: 1fr 360px; gap:14px; align-items:start;">
+      <table>
+        <thead>
+          <tr>
+            <th>Время</th>
+            <th>URL</th>
+            <th>Действие</th>
+            <th>Уверенность</th>
+            <th class="muted">Причина</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+      <div id="details" class="card" style="position:sticky; top:10px;">
+        <div class="label">Детали</div>
+        <div id="detailsContent" class="muted">Выберите строку в таблице…</div>
+      </div>
+    </div>
+  </div>
+
+<script src="dashboard.js"></script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.venv/
+venv/
+ENV/
+*.sqlite3
+*.db
+/database/*.db
+/database/*.sqlite
+/database/*.sqlite3
+
+# Node/Chrome extension build (placeholder if added later)
+node_modules/
+dist/
+
+# Editor/OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
+
+# Local runtime
+backend/server.log
+backend/.uvicorn_pid
+
+# Docker
+*.pid
+model.pt

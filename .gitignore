@@ -1,0 +1,124 @@
+# -------- Unified .gitignore for PhishGuard (Python, Node.js, Docker, AI, Chrome Extension) -------- #
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+ENV/
+env/
+.env
+.env.*
+*.sqlite3
+*.db
+*.pkl
+*.pt
+*.h5
+*.pth
+*.pyo
+*.pyd
+.ipynb_checkpoints/
+
+# Database
+**/database/*.db
+**/database/*.sqlite*
+
+# Node.js / npm / JS / Chrome extension
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+package-lock.json
+yarn.lock
+.pnp/
+.pnp.js
+frontend/dist/
+extension/dist/
+extension/*.zip
+extension/*.crx
+extension/*.pem
+
+# Logs
+*.log
+logs/
+backend/*.log
+dashb*/*.log
+
+# Docker
+.dockerignore
+docker-compose.yml
+*.pid
+*.sock
+*.tmp
+*.bak
+
+# AWS / Lambda / Amplify
+.aws-sam/
+samconfig.toml
+amplify/cli.json
+amplify/.config/
+amplify/backend/amplify-meta.json
+.amplify
+amplify_outputs*
+amplifyconfiguration*
+check*
+
+# IDE / Editor
+.vscode/
+.idea/
+*.sw?
+*~
+.DS_Store
+Thumbs.db
+.suo
+.ntvs*
+.njsproj
+.sln
+
+# OS / System junk
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Desktop.ini
+
+# Temporary
+/tmp/
+tmp/
+temp/
+*.tmp
+
+# Config (potentially sensitive or local)
+auto_scan_config.json
+**/config/local.*
+**/config/production.*
+
+# Archives
+*.zip
+*.tar.gz
+*.rar
+
+# Model files and checkpoints
+*.pt
+*.h5
+*.pth
+*.pkl
+
+# Miscellaneous
+coverage/
+*.coverage
+htmlcov/
+.envrc
+
+# Remove duplicated and unneeded rules from subfolders
+# -------- END UNIFIED .gitignore -------- #
+

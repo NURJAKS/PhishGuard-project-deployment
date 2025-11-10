@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PhishGuard - Анализ документа</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f1020 0%, #1a1b34 50%, #0f1020 100%);
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            background: rgba(0,0,0,0.4);
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .header h1 {
+            font-size: 24px;
+            font-weight: 300;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .back-btn {
+            background: rgba(60, 60, 60, 0.9);
+            color: #e0e0e0;
+            border: 1px solid rgba(255,255,255,0.15);
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        
+        .back-btn:hover {
+            background: rgba(80, 80, 80, 0.95);
+            transform: translateY(-1px);
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 60px 20px;
+        }
+        
+        .spinner {
+            border: 3px solid rgba(255,255,255,0.3);
+            border-top: 3px solid #4CAF50;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .card {
+            background: rgba(40, 40, 40, 0.8);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+        }
+        
+        .card h2 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: #9fb7ff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .risk-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+            margin-left: 10px;
+        }
+        
+        .risk-high {
+            background: #e74c3c;
+            color: white;
+        }
+        
+        .risk-medium {
+            background: #f39c12;
+            color: white;
+        }
+        
+        .risk-low {
+            background: #2ecc71;
+            color: white;
+        }
+        
+        .extracted-data {
+            background: rgba(46, 204, 113, 0.1);
+            border-left: 3px solid #2ecc71;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 10px;
+        }
+        
+        .extracted-data-item {
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .extracted-data-item:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+        
+        .extracted-data-label {
+            font-size: 11px;
+            opacity: 0.7;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+        }
+        
+        .extracted-data-value {
+            font-size: 14px;
+            font-weight: 500;
+            color: #2ecc71;
+        }
+        
+        .phishing-warning {
+            background: rgba(231, 76, 60, 0.2);
+            border-left: 3px solid #e74c3c;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 10px;
+        }
+        
+        .phishing-warning h3 {
+            color: #ff6b6b;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+        
+        .phishing-warning ul {
+            margin-left: 20px;
+            margin-top: 10px;
+        }
+        
+        .phishing-warning li {
+            margin-bottom: 8px;
+            line-height: 1.5;
+        }
+        
+        .safe-message {
+            background: rgba(46, 204, 113, 0.2);
+            border-left: 3px solid #2ecc71;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 10px;
+            color: #2ecc71;
+        }
+        
+        .document-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .info-item {
+            background: rgba(0,0,0,0.3);
+            padding: 10px;
+            border-radius: 6px;
+        }
+        
+        .info-label {
+            font-size: 11px;
+            opacity: 0.7;
+            margin-bottom: 4px;
+        }
+        
+        .info-value {
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .text-preview {
+            background: rgba(0,0,0,0.3);
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-size: 12px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        
+        .error {
+            background: rgba(231, 76, 60, 0.2);
+            border-left: 3px solid #e74c3c;
+            padding: 15px;
+            border-radius: 6px;
+            color: #ffcccc;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🛡️ PhishGuard - Анализ документа</h1>
+            <button class="back-btn" id="back-btn">← Назад</button>
+        </div>
+        
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <div>Анализ документа...</div>
+        </div>
+        
+        <div id="content" style="display:none;">
+            <!-- Информация о документе -->
+            <div class="card">
+                <h2>📄 Информация о документе</h2>
+                <div class="document-info" id="document-info"></div>
+            </div>
+            
+            <!-- Оценка риска -->
+            <div class="card">
+                <h2>⚠️ Оценка риска фишинга</h2>
+                <div id="risk-assessment"></div>
+            </div>
+            
+            <!-- Извлеченные данные -->
+            <div class="card">
+                <h2>💳 Извлеченные банковские данные</h2>
+                <div id="extracted-data"></div>
+            </div>
+            
+            <!-- Предварительный просмотр текста -->
+            <div class="card">
+                <h2>📝 Предварительный просмотр текста</h2>
+                <div class="text-preview" id="text-preview"></div>
+            </div>
+        </div>
+        
+        <div id="error" class="error" style="display:none;"></div>
+    </div>
+    
+    <script src="document-viewer.js"></script>
+</body>
+</html>
+

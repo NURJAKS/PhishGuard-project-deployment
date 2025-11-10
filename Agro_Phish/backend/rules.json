@@ -1,0 +1,42 @@
+{
+  "blacklist_domains": [
+    "fake-bank.com",
+    "scam-website.org",
+    "malicious-link.net"
+  ],
+  "whitelist_domains": [
+    "halykbank-kz.netlify.app",
+    "bankffin-kz.netlify.app"
+  ],
+  "suspicious_keywords": [
+    "free-money",
+    "win-prize",
+    "urgent-action",
+    "verify-account",
+    "suspended-account",
+    "security-alert",
+    "click-here-now",
+    "limited-time",
+    "act-now",
+    "congratulations-you-won"
+  ],
+  "trusted_domains": [
+    "google.com",
+    "facebook.com",
+    "amazon.com",
+    "microsoft.com",
+    "apple.com",
+    "github.com",
+    "stackoverflow.com",
+    "wikipedia.org"
+  ],
+  "suspicious_tlds": [
+    ".tk",
+    ".ml",
+    ".ga",
+    ".cf"
+  ],
+  "http_allowlist": [
+    "localhost"
+  ]
+}

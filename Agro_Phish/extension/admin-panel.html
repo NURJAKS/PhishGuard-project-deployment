@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PhishGuard – Админ Панель</title>
+<style>
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; background: #0f1020; color: #fff; }
+  header { padding: 16px 20px; background: linear-gradient(135deg,#ff6b6b,#e63946); display:flex; align-items:center; gap:12px; }
+  header img { width:28px; height:28px; }
+  h1 { margin: 0; font-size: 18px; font-weight: 600; }
+  .wrap { padding: 20px; max-width: 1200px; margin: 0 auto; }
+  .card { background: #1a1b34; padding: 14px; border-radius: 10px; border:1px solid #26284a; margin-bottom: 16px; }
+  .label { font-size: 12px; opacity: .8; margin-bottom: 6px; }
+  .value { font-size: 22px; font-weight: 700; }
+  .toolbar { display:flex; gap:10px; margin-bottom: 16px; align-items:center; flex-wrap: wrap; }
+  button { background:#3b3ee5; color:#fff; border:none; padding:10px 14px; border-radius:8px; cursor:pointer; font-weight:600; }
+  button:hover { background:#4a4ff5; }
+  button.danger { background:#e74c3c; }
+  button.danger:hover { background:#c0392b; }
+  button.success { background:#2ecc71; }
+  button.success:hover { background:#27ae60; }
+  button:disabled { opacity:0.5; cursor:not-allowed; }
+  table { width:100%; border-collapse: collapse; }
+  th, td { padding:10px 12px; text-align:left; border-bottom:1px solid #26284a; font-size: 13px; }
+  th { position: sticky; top: 0; background:#141532; z-index:1; }
+  .tag { padding:3px 8px; border-radius: 999px; font-size: 12px; font-weight:700; display:inline-block; }
+  .tag-block { background:#4a2020; color:#e74c3c; }
+  .tag-allow { background:#1a4a1a; color:#2ecc71; }
+  .muted { opacity:.7; }
+  .toggle-switch { position: relative; display: inline-block; width: 60px; height: 34px; }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; }
+  .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #2a2c55; transition: .4s; border-radius: 34px; }
+  .slider:before { position: absolute; content: ""; height: 26px; width: 26px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+  input:checked + .slider { background-color: #2ecc71; }
+  input:checked + .slider:before { transform: translateX(26px); }
+  .toggle-container { display: flex; align-items: center; gap: 12px; }
+  .status-indicator { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; }
+  .status-indicator.active { background: #2ecc71; }
+  .status-indicator.inactive { background: #e74c3c; }
+  .message { padding: 12px; border-radius: 8px; margin-bottom: 16px; display: none; }
+  .message.success { background: rgba(46, 204, 113, 0.2); border: 1px solid #2ecc71; }
+  .message.error { background: rgba(231, 76, 60, 0.2); border: 1px solid #e74c3c; }
+  input[type="text"] { background:#111233; color:#fff; border:1px solid #26284a; border-radius:8px; padding:10px 12px; min-width: 300px; }
+</style>
+</head>
+<body>
+  <header>
+    <img src="icons/icon32.png" alt="logo" />
+    <h1>🛡️ PhishGuard – Админ Панель</h1>
+  </header>
+  <div class="wrap">
+    <div id="message" class="message"></div>
+
+    <!-- Секция управления автосканированием -->
+    <div class="card">
+      <h2 style="margin-top: 0;">⚙️ Управление автосканированием</h2>
+      <div class="toggle-container">
+        <label class="toggle-switch">
+          <input type="checkbox" id="autoScanToggle">
+          <span class="slider"></span>
+        </label>
+        <div>
+          <div style="font-weight: 600; margin-bottom: 4px;">
+            <span id="autoScanStatus" class="status-indicator"></span>
+            <span id="autoScanText">Автосканирование: Включено</span>
+          </div>
+          <div class="muted" style="font-size: 12px;">
+            Автоматически сканировать все посещаемые сайты с помощью AI
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Секция управления разрешенными сайтами (белый список) -->
+    <div class="card">
+      <h2 style="margin-top: 0;">✅ Управление разрешенными сайтами (белый список)</h2>
+      <div class="toolbar">
+        <button id="refreshWhitelist">Обновить список</button>
+        <span id="api-url" class="muted"></span>
+      </div>
+      
+      <div style="margin-bottom: 16px;">
+        <div class="label">Добавить домен в белый список</div>
+        <div style="display: flex; gap: 10px; align-items: center; margin-top: 8px;">
+          <input type="text" id="addWhitelistDomainInput" placeholder="example.com">
+          <button id="addWhitelistDomainBtn">Добавить</button>
+        </div>
+      </div>
+
+      <div class="table-wrap" style="max-height: 500px; overflow-y: auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Домен</th>
+              <th>Статус</th>
+              <th>Действия</th>
+            </tr>
+          </thead>
+          <tbody id="whitelistTableBody">
+            <tr>
+              <td colspan="3" class="muted" style="text-align: center; padding: 20px;">
+                Загрузка...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Секция управления заблокированными сайтами -->
+    <div class="card">
+      <h2 style="margin-top: 0;">🚫 Управление заблокированными сайтами</h2>
+      <div class="toolbar">
+        <button id="refreshBlacklist">Обновить список</button>
+        <span id="api-url" class="muted"></span>
+      </div>
+      
+      <div style="margin-bottom: 16px;">
+        <div class="label">Добавить домен в черный список</div>
+        <div style="display: flex; gap: 10px; align-items: center; margin-top: 8px;">
+          <input type="text" id="addDomainInput" placeholder="example.com">
+          <button id="addDomainBtn">Добавить</button>
+        </div>
+      </div>
+
+      <div class="table-wrap" style="max-height: 500px; overflow-y: auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Домен</th>
+              <th>Статус</th>
+              <th>Действия</th>
+            </tr>
+          </thead>
+          <tbody id="blacklistTableBody">
+            <tr>
+              <td colspan="3" class="muted" style="text-align: center; padding: 20px;">
+                Загрузка...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Информация -->
+    <div class="card">
+      <h3 style="margin-top: 0;">ℹ️ Примечание</h3>
+      <p class="muted" style="font-size: 13px; line-height: 1.6;">
+        <strong>Белый список:</strong> Сайты в белом списке всегда разрешены, даже если они могут быть опасными. Расширение пропустит их без проверки.<br><br>
+        <strong>Черный список:</strong> При удалении домена из черного списка, он снова станет доступным. Однако, если при следующем посещении сайт будет обнаружен как мошеннический, он снова будет заблокирован автоматически.
+      </p>
+    </div>
+  </div>
+
+<script src="admin-panel.js"></script>
+</body>
+</html>
+

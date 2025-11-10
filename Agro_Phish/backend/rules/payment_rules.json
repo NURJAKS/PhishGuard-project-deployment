@@ -1,0 +1,25 @@
+{
+  "weights": {
+    "no_https": 0.3,
+    "contains_card_fields": 0.4,
+    "suspicious_form_action": 0.25,
+    "exfiltrate_js": 0.3,
+    "login_or_payment_on_untrusted": 0.15,
+    "blacklist": 0.9
+  },
+  "threshold_warn": 0.55,
+  "threshold_block": 0.82,
+  "trusted_domains": [
+    "stripe.com",
+    "paypal.com",
+    "checkout.stripe.com",
+    "canva.com",
+    "www.canva.com",
+    "google.com",
+    "amazon.com",
+    "microsoft.com",
+    "apple.com"
+  ]
+}
+
+
