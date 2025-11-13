@@ -128,15 +128,57 @@ document.addEventListener('DOMContentLoaded', () => {
       tag.className = 'tag tag-block';
       tag.textContent = 'ЗАБЛОКИРОВАН';
       tdStatus.appendChild(tag);
-      
+
+      // Новая кнопка подачи жалобы
       const tdActions = document.createElement('td');
+      // Старое: deleteBtn
       const deleteBtn = document.createElement('button');
       deleteBtn.className = 'danger';
       deleteBtn.textContent = 'Удалить из списка';
-      deleteBtn.dataset.domain = domain; // Сохраняем домен в data-атрибуте
+      deleteBtn.dataset.domain = domain;
       deleteBtn.addEventListener('click', () => removeDomain(domain));
       tdActions.appendChild(deleteBtn);
-      
+      // Новое: reportBtn
+      const reportBtn = document.createElement('button');
+      reportBtn.className = 'success';
+      reportBtn.textContent = 'Подать жалобу';
+      reportBtn.style.marginLeft = '10px';
+      reportBtn.addEventListener('click', async () => {
+        reportBtn.disabled = true;
+        reportBtn.textContent = 'Отправка...';
+        try {
+          const payload = {
+            domain: domain,
+            reason: 'В черном списке из-за угрозы безопасности'
+          };
+          const res = await fetch(`${API_BASE_URL}/admin/telegram/report`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+          });
+          const result = await res.json();
+          if (result.success) {
+            showMessage('Жалоба отправлена в Telegram', 'success');
+            reportBtn.textContent = 'Жалоба отправлена';
+            setTimeout(() => {
+              reportBtn.disabled = false;
+              reportBtn.textContent = 'Подать жалобу';
+            }, 3000);
+          } else {
+            showMessage('Не удалось отправить жалобу: ' + (result.error || ''), 'error');
+            reportBtn.disabled = false;
+            reportBtn.textContent = 'Подать жалобу';
+          }
+        } catch (e) {
+          showMessage('Ошибка при отправке жалобы: ' + (e.message || e), 'error');
+          reportBtn.disabled = false;
+          reportBtn.textContent = 'Подать жалобу';
+        }
+      });
+      tdActions.appendChild(reportBtn);
+
       tr.appendChild(tdDomain);
       tr.appendChild(tdStatus);
       tr.appendChild(tdActions);

@@ -25,7 +25,7 @@ from schemas import PaymentAnalysisRequest, PaymentAnalysisResponse
 from payment_analyzer import analyze_payment_page, sha256_hex, mask_pan
 from secret_scanner import scan_url_for_js_secrets
 from pinkerton_integration import run_pinkerton
-from ai_analyzer import analyze_urls_with_llm
+from ai_analyzer import analyze_urls_with_llm, _fetch_text, _collect_js_urls
 from document_analyzer import analyze_document, get_analysis
 from invoice_analyzer import verify_invoice, get_invoice_analysis
 from fastapi import UploadFile, File
@@ -85,10 +85,12 @@ app.add_middleware(
 create_tables()
 
 # Загружаем правила
+RULES_PATH = os.path.join(os.path.dirname(__file__), "rules.json")
+
 def load_rules():
-    """Загружает правила из rules.json"""
+    """Загружает правила из rules.json (абсолютный путь)"""
     try:
-        with open("rules.json", "r", encoding="utf-8") as f:
+        with open(RULES_PATH, "r", encoding="utf-8") as f:
             return json.load(f)
     except FileNotFoundError:
         # Возвращаем базовые правила если файл не найден
@@ -97,15 +99,16 @@ def load_rules():
             "whitelist_domains": [],
             "suspicious_keywords": [],
             "trusted_domains": [],
-            "suspicious_tlds": []
+            "suspicious_tlds": [],
+            "http_allowlist": [] # Добавляем http_allowlist
         }
 
 rules = load_rules()
 
 def save_rules(rules_data: dict):
-    """Сохраняет правила в rules.json"""
+    """Сохраняет правила в rules.json (абсолютный путь)"""
     try:
-        with open("rules.json", "w", encoding="utf-8") as f:
+        with open(RULES_PATH, "w", encoding="utf-8") as f:
             json.dump(rules_data, f, ensure_ascii=False, indent=2)
         return True
     except Exception as e:
@@ -274,6 +277,24 @@ def analyze_url(url: str) -> dict:
             "reason": f"Ошибка при анализе URL: {str(e)}"
         }
 
+# HELPER: Telegram auto-report (чтобы не дублировать в ручном и авто)
+def send_tg_auto_report(domain, reason, incident_id=None, ts=None):
+    import requests as py_requests
+    from datetime import datetime
+    TELEGRAM_BOT_TOKEN = "7972590264:AAFvTfbFqyaBS1lLK5W6EWrPEsVh5-KAM58"
+    TELEGRAM_CHAT_ID = "-1003297580651"
+    msg = f"\u26a0\ufe0f <b>Автожалоба на опасный сайт (AI/HTTP)</b>\n---\n<b>Домен:</b> <code>{domain}</code>\n<b>Причина:</b> {reason}\n<b>ID инцидента:</b> {incident_id or '-'}\n<b>Время:</b> {ts or datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    send_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": msg,
+        "parse_mode": "HTML"
+    }
+    try:
+        py_requests.post(send_url, json=payload, timeout=10)
+    except Exception:
+        pass
+
 @app.post("/v1/check/url", response_model=URLResponse)
 async def check_url(request: URLRequest, db: Session = Depends(get_db)):
     """Проверяет URL на фишинг и мошенничество"""
@@ -297,7 +318,80 @@ async def check_url(request: URLRequest, db: Session = Depends(get_db)):
     db.add(incident)
     db.commit()
     db.refresh(incident)
-    
+
+    from urllib.parse import urlparse
+    parsed = urlparse(request.url)
+    domain = parsed.netloc.lower()
+
+    def format_ai_report(ai):
+        block = []
+        block.append(f"▶️ <b>Риск по ИИ:</b> <b>{ai.get('risk')}</b>")
+        if ai.get('provider'):
+            block.append(f"<b>Провайдер анализа:</b> {ai.get('provider')}")
+        reasons = ai.get('reasons') or []
+        if reasons:
+            block.append("<b>Причины (ИИ):</b>")
+            for idx, r in enumerate(reasons, 1):
+                block.append(f"    {idx}) {r}")
+        return '\n'.join(block)
+
+    if analysis["action"] == "block":
+        # 1. Если домена нет в rules['blacklist_domains'] — добавить его автоматически
+        blacklist = rules.get("blacklist_domains", [])
+        is_new_blacklisted = False
+        if domain not in blacklist:
+            blacklist.append(domain)
+            rules["blacklist_domains"] = blacklist
+            save_rules(rules)
+            is_new_blacklisted = True
+        # 2. Авто-жалоба/подробный отчет только при первом добавлении домена в blacklist
+        if is_new_blacklisted:
+            # AI-анализ
+            ai_report = analyze_urls_with_llm([request.url])
+            ai = ai_report["items"][0] if ai_report and ai_report.get("items") else {}
+            ai_block = format_ai_report(ai)
+            matched = []
+            # Попытаться выделить ключевые слова блокировки из анализа
+            # Найденные подозрительные tld / keywords из analysis['reason']
+            if "ключевые слова" in analysis["reason"] or "паттерны" in analysis["reason"]:
+                matched.append(f"⚠️ {analysis['reason']}")
+            if "tld" in analysis["reason"]:
+                matched.append(f"⚠️ {analysis['reason']}")
+            # Форматируем для удобства госорганов и силовых ведомств
+            msg = (
+                f"\u26a0\ufe0f <b>Детальный отчет: Фишинговый/Опасный сайт заблокирован</b>\n"
+                f"---\n"
+                f"<b>Дата и время:</b> {incident.timestamp.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                f"<b>Исходный URL:</b> <code>{request.url}</code>\n"
+                f"<b>Домен (netloc):</b> <code>{domain}</code>\n"
+                f"<b>Статус:</b> <b>Заблокирован</b>\n"
+                f"<b>ID инцидента:</b> {incident.id}\n"
+                f"<b>Уверенность (score):</b> {analysis['score'] * 100:.1f}%\n"
+                f"<b>Причина детектирования/блокировки:</b> {analysis['reason']}\n"
+                + (f"<b>Обнаружено паттернов/keywords:</b>\n" + '\n'.join(matched) if matched else "") +
+                f"\n<b>ИИ-Анализ сайта:</b>\n{ai_block}\n"
+                "---\nКонтакт: @your_admin_for_cyber (бот) | PhishGuard\n"
+            )
+            import requests as py_requests
+            TELEGRAM_BOT_TOKEN = "7972590264:AAFvTfbFqyaBS1lLK5W6EWrPEsVh5-KAM58"
+            TELEGRAM_CHAT_ID = "-1003297580651"
+            send_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+            payload = {
+                "chat_id": TELEGRAM_CHAT_ID,
+                "text": msg,
+                "parse_mode": "HTML"
+            }
+            try:
+                py_requests.post(send_url, json=payload, timeout=15)
+            except Exception:
+                pass
+        else:
+            # Если домен уже есть в ЧС — как раньше, но не дублировать report в TG каждый раз
+            today_str = datetime.now().strftime('%Y-%m-%d')
+            exists = db.query(Incident).filter(Incident.action == "block").filter(Incident.url.contains(domain)).filter(Incident.timestamp >= today_str).first()
+            if not exists:
+                send_tg_auto_report(domain=domain, reason=analysis["reason"], incident_id=incident.id, ts=incident.timestamp.strftime('%Y-%m-%d %H:%M:%S'))
+
     return URLResponse(
         action=analysis["action"],
         score=analysis["score"],
@@ -1153,6 +1247,83 @@ async def set_auto_scan_status(req: AutoScanConfigRequest):
         "enabled": req.enabled,
         "message": f"Автосканирование {'включено' if req.enabled else 'выключено'}"
     }
+
+TELEGRAM_BOT_TOKEN = "7972590264:AAFvTfbFqyaBS1lLK5W6EWrPEsVh5-KAM58"
+TELEGRAM_CHAT_ID = "-1003297580651"
+
+class TelegramReportRequest(BaseModel):
+    domain: str
+    reason: str | None = None
+    incident_id: int | None = None
+    timestamp: str | None = None
+    url: str | None = None
+
+@app.post("/admin/telegram/report")
+async def telegram_report(request: TelegramReportRequest):
+    import requests as py_requests
+    from datetime import datetime
+    domain = request.domain
+    reason = request.reason or "Не указана"
+    incident_id = request.incident_id or "-"
+    ts = request.timestamp or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    url = request.url or f"https://{domain}"
+    # Технический анализ
+    html, status = _fetch_text(url)
+    js_urls = _collect_js_urls(url, html)
+    is_https = url.lower().startswith("https://")
+    html_size = len(html.encode("utf-8", errors="ignore")) if html else 0
+    # ИИ-анализ сайта
+    ai_report = analyze_urls_with_llm([url])
+    ai = ai_report["items"][0] if ai_report and ai_report.get("items") else {}
+    def format_ai_report(ai):
+        block = []
+        block.append(f"▶️ <b>Риск по ИИ:</b> <b>{ai.get('risk')}</b>")
+        if ai.get('provider'):
+            block.append(f"<b>Провайдер анализа:</b> {ai.get('provider')}")
+        reasons = ai.get('reasons') or []
+        if reasons:
+            block.append("<b>Причины по анализу ИИ:</b>")
+            for idx, r in enumerate(reasons, 1):
+                block.append(f"    {idx}) {r}")
+        return '\n'.join(block)
+    ai_block = format_ai_report(ai)
+    # ssl
+    ssl_info = "Да" if is_https else "Нет"
+    # js-подробности
+    js_block = f"\n<b>Найдено JS-файлов:</b> {len(js_urls)}" + (f"\n<b>Первые 5 JS:</b> " + '\n - '.join(js_urls[:5]) if js_urls else "")
+    msg = (
+        f"\u26a0\ufe0f <b>Детальный отчет: Жалоба на опасный сайт</b>\n"
+        f"---\n"
+        f"<b>Дата и время:</b> {ts}\n"
+        f"<b>Исходный URL:</b> <code>{url}</code>\n"
+        f"<b>Домен (netloc):</b> <code>{domain}</code>\n"
+        f"<b>ID инцидента/запроса:</b> {incident_id}\n"
+        f"<b>Причина отправки жалобы:</b> {reason}\n"
+        f"<b>Статус HTTPS/SSL:</b> {ssl_info}\n"
+        f"<b>Код ответа:</b> {status}\n"
+        f"<b>Длина HTML:</b> {html_size} байт\n"
+        f"{js_block}\n"
+        f"{ai_block}\n"
+        f"---\nКонтакт: @your_admin_for_cyber (бот) | PhishGuard\n"
+    )
+    TELEGRAM_BOT_TOKEN = "7972590264:AAFvTfbFqyaBS1lLK5W6EWrPEsVh5-KAM58"
+    TELEGRAM_CHAT_ID = "-1003297580651"
+    send_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": msg,
+        "parse_mode": "HTML"
+    }
+    try:
+        resp = py_requests.post(send_url, json=payload, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("ok"):
+            return {"success": True, "message": "Жалоба успешно отправлена в Telegram"}
+        else:
+            return {"success": False, "error": data}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 if __name__ == "__main__":
     import uvicorn
