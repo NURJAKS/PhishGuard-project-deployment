@@ -1,17 +1,32 @@
-# 🛡️ PhishGuard
+# 🛡️ PhishGuard AI
 
-> Modern AI-powered system to detect and block phishing threats for Kazakhstan and beyond
+<div align="center">
 
----
+**Modern AI-powered phishing detection system protecting users and financial institutions**
 
-## 🌐 Overview
-PhishGuard is an advanced open-source platform protecting users, banks, and fintech from phishing. Built with a scalable microservices architecture and rich AI analysis, it includes:
-- **Browser extension (MV3 Chrome)**
-- **FastAPI backend (Python)**
-- **AI/LLM-based analysis engine**
-- **Streamlit statistics dashboard**
-- **Integrated secret-scanning with Pinkerton**
-- **Optional AWS Lambda detection service**
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green)](https://fastapi.tiangolo.com)
+[![Chrome Extension](https://img.shields.io/badge/Chrome-MV3%20Extension-yellow)](https://developer.chrome.com/docs/extensions/mv3/)
+[![License](https://img.shields.io/badge/License-MIT-lightgrey)](LICENSE)
+
+*Real-time protection against phishing threats with advanced AI analysis*
+
+</div>
+
+## 🌟 Overview
+
+PhishGuard AI is a comprehensive cybersecurity platform designed to detect and prevent phishing attacks in real-time. Combining multiple detection methods—from traditional blacklists to advanced LLM analysis—it provides robust protection for users, banks, and fintech companies, with special focus on Kazakhstan's digital landscape.
+
+### 🎯 Key Features
+
+- **🤖 AI-Powered Analysis**: Contextual phishing detection using Google Generative AI and OpenRouter
+- **🛡️ Real-time Protection**: Automatic blocking of malicious sites and forms
+- **🔍 Secret Scanning**: Deep JavaScript analysis with Pinkerton engine
+- **📊 Analytics Dashboard**: Comprehensive statistics and incident monitoring
+- **💳 Payment Protection**: Specialized analysis of payment pages and PAN masking
+- **🌐 Multi-language Support**: Optimized for Kazakh and Russian phishing patterns
+- **⚡ Microservices Architecture**: Scalable and modular design
+
 
 ## 🏗️ Architecture
 ```
@@ -26,15 +41,6 @@ Streamlit Dashboard (Agro_Phish/dashboard/)
 Pinkerton Engine (Pinkerton/) — deep JS secret scan
 Optional: AWS Lambda version (PhishGuardAI/)
 ```
-
-## ⚙️ Features
-- Block dangerous sites and forms automatically
-- Payment page analysis and PAN masking
-- JavaScript/API secret detection
-- Real-time, contextual LLM-powered phishing analysis
-- Configurable blacklists, whitelists & keyword rules
-- Visual analytics dashboard, admin panel, auto-scan toggle
-- RESTful API for integration
 
 ## 🚀 Quick Start
 ### Requirements
