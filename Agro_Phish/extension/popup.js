@@ -37,6 +37,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     const aiDot = document.getElementById('ai-dot');
     const aiText = document.getElementById('ai-text');
     const aiDetails = document.getElementById('ai-details');
+    const checkDnsBtn = document.getElementById('check-dns');
+    const dnsCheckStatus = document.getElementById('dnsCheckStatus');
+    const dnsDot = document.getElementById('dns-dot');
+    const dnsText = document.getElementById('dns-text');
+    const dnsDomain = document.getElementById('dns-domain');
+    const dnsContent = document.getElementById('dns-content');
+    const dnsIps = document.getElementById('dns-ips');
+    const dnsMx = document.getElementById('dns-mx');
+    const dnsGeo = document.getElementById('dns-geo');
+    const dnsHosting = document.getElementById('dns-hosting');
+    const dnsRiskBadge = document.getElementById('dns-risk-badge');
+    const dnsRiskDetails = document.getElementById('dns-risk-details');
     let currentTab = null;
     function isAnalyzableUrl(url) {
         if (!url) return false;
@@ -415,6 +427,270 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else {
                 aiDetails.textContent = 'Попробуйте позже или проверьте подключение к интернету';
             }
+        }
+    });
+
+    // ==================== DNS Check Functions ====================
+    
+    // Known hosting/cloud providers
+    const KNOWN_HOSTING_PROVIDERS = [
+        'amazon', 'aws', 'digitalocean', 'linode', 'vultr', 'ovh', 'hetzner',
+        'google', 'gcp', 'azure', 'microsoft', 'cloudflare', 'fastly', 'akamai',
+        'godaddy', 'hostgator', 'bluehost', 'namecheap', 'dreamhost', 'hostinger',
+        'ionos', 'contabo', 'scaleway', 'upcloud', 'kamatera', 'rackspace'
+    ];
+    
+    // Known residential/ISP providers
+    const KNOWN_ISP_PROVIDERS = [
+        'comcast', 'verizon', 'at&t', 'spectrum', 'cox', 'centurylink',
+        'rostelecom', 'beeline', 'megafon', 'mts', 'tele2', 'yota',
+        'kazakhtelecom', 'kcell', 'activ', 'altel', 'tele2.kz'
+    ];
+    
+    // Cloudflare DNS-over-HTTPS query
+    async function queryCloudflare(domain, type = 'A') {
+        try {
+            const url = `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=${type}`;
+            const response = await fetch(url, {
+                headers: { 'Accept': 'application/dns-json' }
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return await response.json();
+        } catch (e) {
+            console.error(`Cloudflare DNS query error (${type}):`, e);
+            return null;
+        }
+    }
+    
+    // Google DNS fallback
+    async function queryGoogleDns(domain, type = 'A') {
+        try {
+            const url = `https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=${type}`;
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return await response.json();
+        } catch (e) {
+            console.error(`Google DNS query error (${type}):`, e);
+            return null;
+        }
+    }
+    
+    // Query DNS with fallback
+    async function queryDns(domain, type = 'A') {
+        let result = await queryCloudflare(domain, type);
+        if (!result || result.Status !== 0) {
+            result = await queryGoogleDns(domain, type);
+        }
+        return result;
+    }
+    
+    // Get IP geolocation from ipinfo.io
+    async function getIpInfo(ip) {
+        try {
+            const response = await fetch(`https://ipinfo.io/${ip}/json`);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return await response.json();
+        } catch (e) {
+            console.error('ipinfo.io error:', e);
+            return null;
+        }
+    }
+    
+    // Analyze risk based on IP info
+    function analyzeRisk(ipInfo, domain) {
+        const risks = [];
+        let riskScore = 0;
+        
+        if (!ipInfo) {
+            return {
+                level: 'medium',
+                badge: '⚠️ Неизвестно',
+                details: ['Не удалось получить информацию о сервере']
+            };
+        }
+        
+        const org = (ipInfo.org || '').toLowerCase();
+        const hostname = (ipInfo.hostname || '').toLowerCase();
+        
+        // Check if it's a known hosting provider
+        const isHosting = KNOWN_HOSTING_PROVIDERS.some(provider => 
+            org.includes(provider) || hostname.includes(provider)
+        );
+        
+        // Check if it's a known ISP (residential)
+        const isResidential = KNOWN_ISP_PROVIDERS.some(provider => 
+            org.includes(provider) || hostname.includes(provider)
+        );
+        
+        if (isHosting) {
+            risks.push('✓ Размещен на профессиональном хостинге');
+        } else if (isResidential) {
+            risks.push('⚠️ IP принадлежит домашнему провайдеру (ISP)');
+            riskScore += 30;
+        }
+        
+        // Check for VPN/Proxy indicators
+        if (org.includes('vpn') || org.includes('proxy') || org.includes('tunnel')) {
+            risks.push('⚠️ Возможно использование VPN/Proxy');
+            riskScore += 20;
+        }
+        
+        // Determine risk level
+        let riskLevel = 'low';
+        if (riskScore >= 40) {
+            riskLevel = 'high';
+        } else if (riskScore >= 20) {
+            riskLevel = 'medium';
+        }
+        
+        // Generate badge and summary
+        let badge, summary;
+        switch (riskLevel) {
+            case 'high':
+                badge = '🔴 Высокий риск';
+                summary = 'Обнаружены признаки потенциально опасного сайта';
+                break;
+            case 'medium':
+                badge = '🟡 Средний риск';
+                summary = 'Есть некоторые подозрительные признаки';
+                break;
+            default:
+                badge = '🟢 Низкий риск';
+                summary = 'Сайт размещен на надежной инфраструктуре';
+        }
+        
+        return {
+            level: riskLevel,
+            badge: badge,
+            summary: summary,
+            details: risks.length > 0 ? risks : ['✓ Подозрительных признаков не обнаружено'],
+            isHosting: isHosting,
+            isResidential: isResidential
+        };
+    }
+    
+    // Format IP address
+    function formatIP(ip) {
+        const isIPv6 = ip.includes(':');
+        const label = isIPv6 ? 'IPv6' : 'IPv4';
+        return `<span style="display:inline-block; background:rgba(255,255,255,0.1); padding:2px 6px; border-radius:3px; margin:2px 4px 2px 0; font-size:11px; font-family:monospace;">${label}: ${ip}</span>`;
+    }
+    
+    // Main DNS check function
+    checkDnsBtn.addEventListener('click', async () => {
+        if (!currentTab || !isAnalyzableUrl(currentTab.url)) {
+            showError('DNS проверка доступна только для HTTP/HTTPS страниц');
+            return;
+        }
+        
+        try {
+            const url = new URL(currentTab.url);
+            const domain = url.hostname;
+            
+            // Show DNS check panel
+            dnsCheckStatus.style.display = 'block';
+            dnsText.textContent = 'Проверка DNS...';
+            dnsDot.className = 'status-dot';
+            dnsDot.style.background = '#666666';
+            dnsDomain.textContent = domain;
+            dnsContent.style.display = 'none';
+            dnsIps.innerHTML = '';
+            dnsMx.style.display = 'none';
+            dnsGeo.style.display = 'none';
+            dnsHosting.style.display = 'none';
+            
+            // Query A records (IPv4)
+            const aRecords = await queryDns(domain, 'A');
+            
+            // Query AAAA records (IPv6)
+            const aaaaRecords = await queryDns(domain, 'AAAA');
+            
+            // Query MX records
+            const mxRecords = await queryDns(domain, 'MX');
+            
+            // Collect all IPs
+            const ipv4List = aRecords?.Answer?.filter(r => r.type === 1).map(r => r.data) || [];
+            const ipv6List = aaaaRecords?.Answer?.filter(r => r.type === 28).map(r => r.data) || [];
+            const allIPs = [...ipv4List, ...ipv6List];
+            
+            // Get MX records
+            const mxList = mxRecords?.Answer?.filter(r => r.type === 15).map(r => {
+                const parts = r.data.split(' ');
+                return { priority: parts[0], server: parts[1] || r.data };
+            }) || [];
+            
+            // Update IPs display
+            if (allIPs.length > 0) {
+                dnsIps.innerHTML = '<strong style="opacity:0.8;">IP адреса:</strong><br>' + 
+                    allIPs.map(ip => formatIP(ip)).join(' ');
+            } else {
+                dnsIps.innerHTML = '<span style="opacity:0.6;">IP адреса не найдены</span>';
+            }
+            
+            // Update MX records
+            if (mxList.length > 0) {
+                dnsMx.style.display = 'block';
+                dnsMx.innerHTML = '<strong style="opacity:0.8;">MX записи:</strong><br>' +
+                    mxList.map(mx => `<span style="font-size:11px; font-family:monospace;">[${mx.priority}] ${mx.server}</span>`).join('<br>');
+            }
+            
+            // Get geolocation for first IPv4 IP
+            let ipInfo = null;
+            if (ipv4List.length > 0) {
+                ipInfo = await getIpInfo(ipv4List[0]);
+            }
+            
+            // Update geolocation
+            if (ipInfo) {
+                dnsGeo.style.display = 'block';
+                const geoDetails = [];
+                if (ipInfo.city) geoDetails.push(ipInfo.city);
+                if (ipInfo.region) geoDetails.push(ipInfo.region);
+                if (ipInfo.country) geoDetails.push(ipInfo.country);
+                const location = geoDetails.join(', ') || 'Неизвестно';
+                dnsGeo.innerHTML = `<strong style="opacity:0.8;">Геолокация:</strong> 📍 ${location}`;
+                
+                // Update hosting info
+                if (ipInfo.org) {
+                    dnsHosting.style.display = 'block';
+                    dnsHosting.innerHTML = `<strong style="opacity:0.8;">Провайдер:</strong> 🏢 ${ipInfo.org}`;
+                }
+            }
+            
+            // Analyze risks
+            const riskAnalysis = analyzeRisk(ipInfo, domain);
+            
+            // Update risk badge
+            dnsRiskBadge.textContent = riskAnalysis.badge;
+            const riskColors = {
+                low: 'rgba(46, 204, 113, 0.3)',
+                medium: 'rgba(243, 156, 18, 0.3)',
+                high: 'rgba(231, 76, 60, 0.3)'
+            };
+            dnsRiskBadge.style.background = riskColors[riskAnalysis.level] || riskColors.medium;
+            
+            // Update risk details
+            const detailsHtml = [
+                `<div style="margin-bottom:6px; opacity:0.9;">${riskAnalysis.summary}</div>`,
+                ...riskAnalysis.details.map(d => `<div style="margin:3px 0;">• ${d}</div>`)
+            ].join('');
+            dnsRiskDetails.innerHTML = detailsHtml;
+            
+            // Update status
+            dnsText.textContent = '✓ DNS проверка завершена';
+            dnsDot.className = 'status-dot';
+            dnsDot.classList.add('active');
+            dnsContent.style.display = 'block';
+            
+        } catch (e) {
+            console.error('DNS check error:', e);
+            dnsText.textContent = '❌ Ошибка DNS проверки';
+            dnsDot.className = 'status-dot inactive';
+            dnsContent.style.display = 'block';
+            dnsRiskBadge.textContent = '❌ Ошибка';
+            dnsRiskBadge.style.background = 'rgba(231, 76, 60, 0.3)';
+            dnsRiskDetails.innerHTML = `Не удалось выполнить DNS проверку: ${e.message}`;
+            showError('Ошибка DNS проверки: ' + e.message);
         }
     });
     paymentBackBtn.addEventListener('click', async () => {

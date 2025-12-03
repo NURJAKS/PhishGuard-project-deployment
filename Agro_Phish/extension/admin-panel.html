@@ -42,6 +42,37 @@
   .message.success { background: rgba(46, 204, 113, 0.2); border: 1px solid #2ecc71; }
   .message.error { background: rgba(231, 76, 60, 0.2); border: 1px solid #e74c3c; }
   input[type="text"] { background:#111233; color:#fff; border:1px solid #26284a; border-radius:8px; padding:10px 12px; min-width: 300px; }
+  
+  /* DNS Spinner */
+  .dns-spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid #26284a;
+    border-top-color: #3b3ee5;
+    border-radius: 50%;
+    animation: dns-spin 1s linear infinite;
+    margin: 0 auto;
+  }
+  @keyframes dns-spin {
+    to { transform: rotate(360deg); }
+  }
+  
+  /* Risk badges */
+  .risk-low { background: #1a4a1a; color: #2ecc71; }
+  .risk-medium { background: #4a3a1a; color: #f39c12; }
+  .risk-high { background: #4a2020; color: #e74c3c; }
+  
+  /* IP tag */
+  .ip-tag { 
+    display: inline-block; 
+    background: #26284a; 
+    padding: 4px 8px; 
+    border-radius: 4px; 
+    margin: 2px 4px 2px 0; 
+    font-size: 12px;
+  }
+  .ip-tag.ipv4 { border-left: 3px solid #3b3ee5; }
+  .ip-tag.ipv6 { border-left: 3px solid #9b59b6; }
 </style>
 </head>
 <body>
@@ -67,6 +98,67 @@
           </div>
           <div class="muted" style="font-size: 12px;">
             Автоматически сканировать все посещаемые сайты с помощью AI
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Секция быстрых действий -->
+    <div class="card">
+      <h2 style="margin-top: 0;">🔧 Быстрые действия</h2>
+      <div class="toolbar">
+        <button id="checkSiteBtn">🔍 Проверка сайта</button>
+        <button id="checkDnsBtn">🌐 Проверка DNS</button>
+        <button id="clearCacheBtn" class="danger">🗑️ Очистить кэш</button>
+      </div>
+      
+      <!-- Результаты DNS проверки -->
+      <div id="dnsResults" style="display: none; margin-top: 16px;">
+        <div class="label">Результаты DNS проверки</div>
+        
+        <!-- Основная информация -->
+        <div id="dnsMainInfo" style="background: #111233; border-radius: 8px; padding: 14px; margin-top: 10px;">
+          <div id="dnsLoading" style="text-align: center; padding: 20px;">
+            <div class="dns-spinner"></div>
+            <div style="margin-top: 10px; opacity: 0.8;">Загрузка DNS данных...</div>
+          </div>
+          <div id="dnsContent" style="display: none;">
+            <!-- Домен -->
+            <div style="margin-bottom: 12px;">
+              <div style="font-size: 11px; opacity: 0.7; margin-bottom: 4px;">ДОМЕН</div>
+              <div id="dnsDomain" style="font-size: 16px; font-weight: 600; color: #3b3ee5;"></div>
+            </div>
+            
+            <!-- IP адреса -->
+            <div style="margin-bottom: 12px;">
+              <div style="font-size: 11px; opacity: 0.7; margin-bottom: 4px;">IP АДРЕСА (A/AAAA записи)</div>
+              <div id="dnsIPs" style="font-family: monospace; font-size: 13px;"></div>
+            </div>
+            
+            <!-- MX записи -->
+            <div id="dnsMxSection" style="margin-bottom: 12px; display: none;">
+              <div style="font-size: 11px; opacity: 0.7; margin-bottom: 4px;">MX ЗАПИСИ (почтовые серверы)</div>
+              <div id="dnsMX" style="font-family: monospace; font-size: 13px;"></div>
+            </div>
+            
+            <!-- Геолокация -->
+            <div id="dnsGeoSection" style="margin-bottom: 12px; display: none;">
+              <div style="font-size: 11px; opacity: 0.7; margin-bottom: 4px;">ГЕОЛОКАЦИЯ</div>
+              <div id="dnsGeo" style="font-size: 13px;"></div>
+            </div>
+            
+            <!-- Хостинг провайдер -->
+            <div id="dnsHostingSection" style="margin-bottom: 12px; display: none;">
+              <div style="font-size: 11px; opacity: 0.7; margin-bottom: 4px;">ХОСТИНГ / ПРОВАЙДЕР</div>
+              <div id="dnsHosting" style="font-size: 13px;"></div>
+            </div>
+            
+            <!-- Анализ рисков -->
+            <div id="dnsRiskSection" style="margin-top: 16px; padding-top: 12px; border-top: 1px solid #26284a;">
+              <div style="font-size: 11px; opacity: 0.7; margin-bottom: 8px;">АНАЛИЗ РИСКОВ</div>
+              <div id="dnsRiskBadge" style="display: inline-block; padding: 6px 12px; border-radius: 6px; font-weight: 600; font-size: 12px;"></div>
+              <div id="dnsRiskDetails" style="margin-top: 10px; font-size: 12px; line-height: 1.6;"></div>
+            </div>
           </div>
         </div>
       </div>

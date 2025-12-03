@@ -230,6 +230,7 @@
 
             <div class="action-buttons">
                 <button id="scan-secrets" class="btn">Проверка сайта</button>
+                <button id="check-dns" class="btn">Проверка DNS</button>
                 <button id="clear-cache" class="btn">Очистить кэш</button>
             </div>
 
@@ -266,6 +267,24 @@
                     <div id="ai-text">Сканирование...</div>
                 </div>
                 <div id="ai-details" class="muted" style="font-size:12px; white-space:pre-wrap;"></div>
+            </div>
+
+            <div id="dnsCheckStatus" class="status-card" style="display:none;">
+                <div class="status-indicator">
+                    <div id="dns-dot" class="status-dot"></div>
+                    <div id="dns-text">Проверка DNS...</div>
+                </div>
+                <div id="dns-domain" style="font-size:11px; opacity:0.8; margin-top:8px; word-break:break-all;"></div>
+                <div id="dns-content" style="margin-top:12px; font-size:12px; line-height:1.6;">
+                    <div id="dns-ips" style="margin-bottom:8px;"></div>
+                    <div id="dns-mx" style="margin-bottom:8px; display:none;"></div>
+                    <div id="dns-geo" style="margin-bottom:8px; display:none;"></div>
+                    <div id="dns-hosting" style="margin-bottom:8px; display:none;"></div>
+                    <div id="dns-risk" style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.1);">
+                        <div id="dns-risk-badge" style="display:inline-block; padding:4px 10px; border-radius:4px; font-weight:600; font-size:11px; margin-bottom:6px;"></div>
+                        <div id="dns-risk-details" style="font-size:11px; opacity:0.9;"></div>
+                    </div>
+                </div>
             </div>
 
             <div class="action-buttons">

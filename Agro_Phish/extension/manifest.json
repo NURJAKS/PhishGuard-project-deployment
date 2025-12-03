@@ -16,13 +16,16 @@
   "host_permissions": [
     "http://localhost:8000/*",
     "https://*/*",
-    "http://*/*"
+    "http://*/*",
+    "https://cloudflare-dns.com/*",
+    "https://dns.google/*",
+    "https://ipinfo.io/*"
   ],
   "background": {
     "service_worker": "background.js"
   },
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' http://localhost:* http://127.0.0.1:*; img-src 'self' data:; style-src 'self' 'unsafe-inline'"
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' http://localhost:* http://127.0.0.1:* https://cloudflare-dns.com https://dns.google https://ipinfo.io; img-src 'self' data:; style-src 'self' 'unsafe-inline'"
   },
   "content_scripts": [
     {
