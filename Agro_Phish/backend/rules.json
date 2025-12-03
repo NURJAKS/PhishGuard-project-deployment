@@ -1,8 +1,15 @@
 {
   "blacklist_domains": [
-    "cyber-police-detailed-test.com"
+    "cyber-police-detailed-test.com",
+    "bankffin-kz.ntlify.app",
+    "bankffin-kz.netlify.app",
+    "halykbank-kz.netlify.app",
+    "baikonurmed.kz",
+    "z.kyz2dar-cia.net"
   ],
-  "whitelist_domains": [],
+  "whitelist_domains": [
+    "bankffin-kz.netlify.app"
+  ],
   "suspicious_keywords": [],
   "trusted_domains": [],
   "suspicious_tlds": [],
