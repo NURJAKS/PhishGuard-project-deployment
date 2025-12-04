@@ -72,10 +72,10 @@ mkdir -p database
 echo "✅ Директория базы данных готова"
 echo ""
 
-# Проверяем, не занят ли порт 8000
-if lsof -Pi :8000 -sTCP:LISTEN -t >/dev/null 2>&1 || netstat -tuln 2>/dev/null | grep -q ":8000 " || ss -tuln 2>/dev/null | grep -q ":8000 "; then
-    echo "⚠️  Порт 8000 уже занят. Останавливаем старый процесс..."
-    lsof -ti:8000 2>/dev/null | xargs kill -9 2>/dev/null || pkill -f "uvicorn.*main:app" 2>/dev/null || true
+# Проверяем, не занят ли порт 8002
+if lsof -Pi :8002 -sTCP:LISTEN -t >/dev/null 2>&1 || netstat -tuln 2>/dev/null | grep -q ":8002 " || ss -tuln 2>/dev/null | grep -q ":8002 "; then
+    echo "⚠️  Порт 8002 уже занят. Останавливаем старый процесс..."
+    lsof -ti:8002 2>/dev/null | xargs kill -9 2>/dev/null || pkill -f "uvicorn.*main:app" 2>/dev/null || true
     sleep 2
     echo "✅ Старые процессы остановлены"
     echo ""
@@ -89,9 +89,9 @@ fi
 
 # Запускаем сервер с правильными параметрами
 echo "🚀 Запуск сервера..."
-echo "   URL: http://localhost:8000"
-echo "   Health check: http://localhost:8000/health"
-echo "   API docs: http://localhost:8000/docs"
+echo "   URL: http://localhost:8002"
+echo "   Health check: http://localhost:8002/health"
+echo "   API docs: http://localhost:8002/docs"
 echo ""
 echo "⚠️  Нажмите Ctrl+C для остановки сервера"
 echo "========================================"
@@ -104,7 +104,7 @@ export PATH="$HOME/.local/bin:$PATH"
 python3 -m uvicorn main:app \
     --reload \
     --host 0.0.0.0 \
-    --port 8000 \
+    --port 8002 \
     --log-level info \
     --access-log
 

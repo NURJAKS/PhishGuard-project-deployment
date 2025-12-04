@@ -14,7 +14,7 @@
     "notifications"
   ],
   "host_permissions": [
-    "http://localhost:8000/*",
+    "http://localhost:8002/*",
     "https://*/*",
     "http://*/*",
     "https://cloudflare-dns.com/*",

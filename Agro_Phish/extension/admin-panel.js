@@ -1,6 +1,6 @@
 'use strict';
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = 'http://localhost:8002';
 
 // Known hosting/cloud providers for risk analysis
 const KNOWN_HOSTING_PROVIDERS = [

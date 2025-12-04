@@ -25,7 +25,7 @@ from schemas import PaymentAnalysisRequest, PaymentAnalysisResponse
 from payment_analyzer import analyze_payment_page, sha256_hex, mask_pan
 from secret_scanner import scan_url_for_js_secrets
 from pinkerton_integration import run_pinkerton
-from ai_analyzer import analyze_urls_with_llm, _fetch_text, _collect_js_urls
+from ai_analyzer import analyze_urls_with_llm, _fetch_text, _collect_js_urls, analyze_payment_with_ai, analyze_url_full_audit
 from document_analyzer import analyze_document, get_analysis
 from invoice_analyzer import verify_invoice, get_invoice_analysis
 from fastapi import UploadFile, File
@@ -466,7 +466,61 @@ async def analyze_payment(req: PaymentAnalysisRequest, db: Session = Depends(get
     masked = mask_pan(html_snippet)
     html_hash = req.html_hash or sha256_hex(masked)
 
+    # Базовый анализ платежной страницы
     result = analyze_payment_page(url, masked, payment_rules)
+
+    # AI анализ ВСЕГДА выполняется (даже если платежная форма не найдена)
+    # Это нужно для анализа сайта на фишинг в целом
+    ai_result = None
+    try:
+        logging.info(f"[PAYMENT] Starting AI analysis for URL: {url}")
+        ai_result = analyze_payment_with_ai(url, masked)
+        if ai_result:
+            logging.info(f"[PAYMENT] AI analysis completed: verdict={ai_result.get('verdict')}, risk_percent={ai_result.get('risk_percent')}, provider={ai_result.get('provider')}")
+        else:
+            logging.warning(f"[PAYMENT] AI analysis returned None")
+    except Exception as e:
+        logging.error(f"[PAYMENT] AI analysis failed with exception: {e}", exc_info=True)
+        # Продолжаем без AI анализа
+
+    # Объединяем результаты AI с базовым анализом (ВСЕГДА добавляем в explain, даже если вердикт "неизвестно")
+    if ai_result:
+        # Если AI говорит "опасно", повышаем score (только если вердикт не "неизвестно")
+        if ai_result.get("verdict") and ai_result.get("verdict") != "неизвестно" and ai_result.get("verdict") == "опасно":
+            risk_percent = ai_result.get("risk_percent", 50)
+            # Конвертируем процент в score (0-1)
+            ai_score = risk_percent / 100.0
+            # Объединяем с существующим score (берем максимум)
+            result["score"] = max(result["score"], ai_score)
+            result["safe"] = result["score"] < payment_rules.get("threshold_warn", 0.6)
+            
+            # Добавляем AI риски в reasons если их нет
+            ai_risks = ai_result.get("risks", [])
+            if ai_risks:
+                for risk in ai_risks:
+                    if risk and risk not in result["reasons"]:
+                        result["reasons"].append(f"ai_detected: {risk}")
+        
+        # Добавляем AI объяснение в explain (ВСЕГДА, даже если платежная форма не найдена или вердикт "неизвестно")
+        if "explain" not in result:
+            result["explain"] = {}
+        result["explain"]["ai_analysis"] = {
+            "verdict": ai_result.get("verdict", "неизвестно"),
+            "risk_percent": ai_result.get("risk_percent", 0),
+            "explanation": ai_result.get("explanation", ""),
+            "risks": ai_result.get("risks", []),
+            "connection_status": ai_result.get("connection_status", "неизвестно"),
+            "address_check": ai_result.get("address_check", "неизвестно"),
+            "redirects": ai_result.get("redirects", "неизвестно"),
+            "safety_points": ai_result.get("safety_points", []),
+            "conclusion": ai_result.get("conclusion", ""),
+            "provider": ai_result.get("provider", "none")
+        }
+    else:
+        # Если AI анализ не выполнен, все равно добавляем пустую структуру для отображения ошибки
+        if "explain" not in result:
+            result["explain"] = {}
+        result["explain"]["ai_analysis"] = None
 
     parsed = urlparse(url)
     domain = parsed.netloc.lower() if parsed and parsed.netloc else None
@@ -526,6 +580,20 @@ async def ai_scan(req: AiScanRequest):
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI scan error: {str(e)}")
+
+
+class FullAuditRequest(BaseModel):
+    url: str
+
+
+@app.post("/v1/ai/full-audit")
+async def full_audit(req: FullAuditRequest):
+    """Полный анти-фишинговый аудит сайта с детальным анализом всех аспектов."""
+    try:
+        result = analyze_url_full_audit(req.url)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Full audit error: {str(e)}")
 
 
 # ==================== Document Analysis API Endpoints ====================
@@ -640,7 +708,7 @@ async def upload_document(file: UploadFile = File(...)):
         
         # Генерируем публичную ссылку
         # В продакшене используйте реальный домен
-        base_url = os.getenv("BASE_URL", "http://localhost:8000")
+        base_url = os.getenv("BASE_URL", "http://localhost:8002")
         share_url = f"{base_url}/v1/document/share/{doc_id}"
         
         logging.info(f"Document uploaded: {original_filename} -> {doc_id}")
@@ -762,7 +830,7 @@ async def get_document_info(doc_id: str):
             metadata = json.load(f)
         
         # Не возвращаем полный путь к файлу, только публичную информацию
-        base_url = os.getenv("BASE_URL", "http://localhost:8000")
+        base_url = os.getenv("BASE_URL", "http://localhost:8002")
         share_url = f"{base_url}/v1/document/share/{doc_id}"
         
         return {
@@ -833,7 +901,7 @@ async def list_documents():
     """Получить список всех загруженных документов"""
     try:
         documents = []
-        base_url = os.getenv("BASE_URL", "http://localhost:8000")
+        base_url = os.getenv("BASE_URL", "http://localhost:8002")
         
         # Сканируем директорию с документами
         if DOCUMENTS_DIR.exists():
@@ -1327,6 +1395,6 @@ async def telegram_report(request: TelegramReportRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8002)
 
 

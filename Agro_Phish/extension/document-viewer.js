@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         try {
-            const candidates = ['http://localhost:8000', 'http://127.0.0.1:8000'];
+            const candidates = ['http://localhost:8002', 'http://127.0.0.1:8002'];
             let base = candidates[0];
             for (const b of candidates) {
                 try {

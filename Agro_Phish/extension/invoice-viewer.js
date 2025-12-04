@@ -71,7 +71,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const formData = new FormData();
             formData.append('file', file);
             
-            const candidates = ['http://localhost:8000', 'http://127.0.0.1:8000'];
+            const candidates = ['http://localhost:8002', 'http://127.0.0.1:8002'];
             let base = candidates[0];
             for (const b of candidates) {
                 try {
@@ -121,7 +121,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             errorMessage += '\n\nПроверьте:\n';
             errorMessage += '1. Подключение к интернету\n';
-            errorMessage += '2. Backend сервер запущен (http://localhost:8000)\n';
+            errorMessage += '2. Backend сервер запущен (http://localhost:8002)\n';
             errorMessage += '3. Формат файла поддерживается (PDF, XML, DOC, DOCX, XLS, XLSX)';
             
             showError(errorMessage);

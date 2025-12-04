@@ -385,7 +385,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             const item = items[0];
             const risk = (item.risk || item.RiskLevel || 'LOW').toString().toUpperCase();
-            const reasons = item.reasons || [];
+            
+            // Извлекаем причины из risks (массив объектов) или reasons (массив строк)
+            let reasons = [];
+            if (item.risks && Array.isArray(item.risks)) {
+                // Новый формат: risks - массив объектов с type, severity, description
+                reasons = item.risks.map(r => {
+                    if (typeof r === 'string') return r;
+                    return r.description || r.type || JSON.stringify(r);
+                });
+            } else if (item.reasons && Array.isArray(item.reasons)) {
+                // Старый формат: reasons - массив строк
+                reasons = item.reasons;
+            }
             
             // Формируем краткий отчет
             let statusText = '';
@@ -413,8 +425,29 @@ document.addEventListener('DOMContentLoaded', async () => {
                 reasons.forEach((reason, idx) => {
                     detailsLines.push(`${idx + 1}. ${reason}`);
                 });
+                
+                // Добавляем объяснение и заключение, если есть
+                if (item.explanation) {
+                    detailsLines.push('');
+                    detailsLines.push('Объяснение:');
+                    detailsLines.push(item.explanation);
+                }
+                if (item.conclusion) {
+                    detailsLines.push('');
+                    detailsLines.push(`Заключение: ${item.conclusion}`);
+                }
             } else {
-                detailsLines.push('Детальный анализ недоступен');
+                // Если нет причин, но есть объяснение - показываем его
+                if (item.explanation) {
+                    detailsLines.push('Анализ:');
+                    detailsLines.push(item.explanation);
+                    if (item.conclusion) {
+                        detailsLines.push('');
+                        detailsLines.push(`Заключение: ${item.conclusion}`);
+                    }
+                } else {
+                    detailsLines.push('Детальный анализ недоступен');
+                }
             }
             
             aiDetails.textContent = detailsLines.join('\n');
