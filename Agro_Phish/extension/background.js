@@ -2,7 +2,7 @@
 console.log('PhishGuard background service worker loaded');
 
 // Конфигурация
-const API_BASE_CANDIDATES = ['http://127.0.0.1:8002', 'http://localhost:8002'];
+const API_BASE_CANDIDATES = ['http://127.0.0.1:8000', 'http://localhost:8000'];
 let RESOLVED_API_BASE = null;
 async function resolveApiBase() {
   if (RESOLVED_API_BASE) return RESOLVED_API_BASE;

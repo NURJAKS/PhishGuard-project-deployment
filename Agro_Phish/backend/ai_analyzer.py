@@ -310,17 +310,27 @@ HTML (первые 15000 символов):
     
     # Fallback если все провайдеры не работают
     logger.warning(f"[PAYMENT AI] All AI providers failed, using fallback")
+    
+    # Проверяем, была ли ошибка с API ключом
+    api_key = os.getenv("GOOGLE_API_KEY", DEFAULT_GOOGLE_API_KEY)
+    error_msg = ""
+    if not api_key or api_key == DEFAULT_GOOGLE_API_KEY:
+        error_msg = "Используется ключ по умолчанию. Установите переменную окружения GOOGLE_API_KEY с вашим API ключом Google AI."
+    else:
+        error_msg = "Проверьте правильность API ключа Google AI и его доступность."
+    
     return {
-        "risks": [],
-        "explanation": "Не удалось выполнить AI анализ",
+        "risks": ["AI анализ недоступен"],
+        "explanation": f"Не удалось выполнить AI анализ. {error_msg} Проверьте подключение к интернету и настройки API ключа.",
         "verdict": "неизвестно",
         "risk_percent": 50,
         "connection_status": "неизвестно",
         "address_check": "неизвестно",
         "redirects": "неизвестно",
         "safety_points": [],
-        "conclusion": "",
-        "provider": "none"
+        "conclusion": "Не удалось выполнить анализ с помощью AI. Рекомендуется проявить осторожность.",
+        "provider": "none",
+        "error": error_msg
     }
 
 
@@ -332,6 +342,10 @@ def _google_ai_analyze_payment(prompt: str, url: str = "") -> Optional[str]:
     
     try:
         api_key = os.getenv("GOOGLE_API_KEY", DEFAULT_GOOGLE_API_KEY)
+        if not api_key or api_key.strip() == "":
+            logger.error("[PAYMENT AI] Google API key is empty")
+            return None
+            
         api_key_masked = api_key[:10] + "..." + api_key[-5:] if len(api_key) > 15 else "***"
         logger.info(f"[PAYMENT AI] Using Google AI Studio (Gemini 2.5 Flash)")
         logger.info(f"[PAYMENT AI] API Key source: {'ENV' if os.getenv('GOOGLE_API_KEY') else 'DEFAULT'} (masked: {api_key_masked})")
@@ -395,6 +409,11 @@ def _google_ai_analyze_payment(prompt: str, url: str = "") -> Optional[str]:
             contents=full_prompt,
         )
         
+        # Проверяем наличие атрибута text
+        if not hasattr(response, 'text') or not response.text:
+            logger.error("[PAYMENT AI] Google AI response has no text attribute")
+            return None
+            
         text = response.text.strip()
         logger.info(f"[PAYMENT AI] Google AI Studio response received ({len(text)} chars)")
         
@@ -407,7 +426,17 @@ def _google_ai_analyze_payment(prompt: str, url: str = "") -> Optional[str]:
         logger.info(f"[PAYMENT AI] Google AI Studio response parsed successfully")
         return text
     except Exception as e:
-        logger.error(f"[PAYMENT AI] Google AI Studio error: {e}")
+        error_msg = str(e)
+        logger.error(f"[PAYMENT AI] Google AI Studio error: {error_msg}", exc_info=True)
+        
+        # Проверяем специфичные ошибки API
+        if "403" in error_msg or "PERMISSION_DENIED" in error_msg or "leaked" in error_msg.lower():
+            logger.error("[PAYMENT AI] API key is invalid, blocked, or leaked. Please use a new API key via GOOGLE_API_KEY environment variable.")
+        elif "401" in error_msg or "UNAUTHENTICATED" in error_msg:
+            logger.error("[PAYMENT AI] API key authentication failed. Please check your API key.")
+        elif "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
+            logger.error("[PAYMENT AI] API quota exceeded. Please check your Google Cloud quotas.")
+        
         return None
 
 

@@ -368,86 +368,133 @@ document.addEventListener('DOMContentLoaded', async () => {
                     base = b; break;
                 } catch (_) {}
             }
-            const resp = await fetch(`${base}/v1/ai/scan`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ urls: [currentTab.url] })
+            
+            // Получаем HTML страницы для анализа
+            const htmlFull = await getPageHtml(currentTab.id);
+            const snippet = maskPan(htmlFull).slice(0, 30000);
+            
+            // Вызываем /analyze_payment который использует Google AI
+            const payload = {
+                request_id: crypto.randomUUID(),
+                url: currentTab.url,
+                html_snippet: snippet,
+                meta: { user_agent: navigator.userAgent }
+            };
+            
+            const resp = await fetch(`${base}/analyze_payment`, {
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
             });
+            
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const data = await resp.json();
-            const items = data.items || [];
             
-            if (items.length === 0) {
-                aiText.textContent = '❌ Не удалось получить результаты проверки';
+            // Извлекаем AI анализ из explain.ai_analysis
+            const aiAnalysis = data.explain?.ai_analysis;
+            
+            if (!aiAnalysis) {
+                aiText.textContent = '❌ AI анализ недоступен';
                 aiDot.className = 'status-dot inactive';
-                aiDetails.textContent = 'Попробуйте позже';
+                aiDetails.textContent = 'Не удалось выполнить AI анализ. Проверьте подключение к интернету и настройки API ключа.\n\nДля использования Google AI:\n1. Получите новый API ключ на https://aistudio.google.com/\n2. Установите переменную окружения:\n   export GOOGLE_API_KEY="ваш_новый_ключ"\n3. Перезапустите backend сервер';
                 return;
             }
             
-            const item = items[0];
-            const risk = (item.risk || item.RiskLevel || 'LOW').toString().toUpperCase();
-            
-            // Извлекаем причины из risks (массив объектов) или reasons (массив строк)
-            let reasons = [];
-            if (item.risks && Array.isArray(item.risks)) {
-                // Новый формат: risks - массив объектов с type, severity, description
-                reasons = item.risks.map(r => {
-                    if (typeof r === 'string') return r;
-                    return r.description || r.type || JSON.stringify(r);
-                });
-            } else if (item.reasons && Array.isArray(item.reasons)) {
-                // Старый формат: reasons - массив строк
-                reasons = item.reasons;
+            // Проверяем, есть ли ошибка в анализе
+            if (aiAnalysis.error || (aiAnalysis.provider === 'none' && aiAnalysis.verdict === 'неизвестно')) {
+                aiText.textContent = '⚠️ AI анализ не выполнен';
+                aiDot.className = 'status-dot inactive';
+                const errorMsg = aiAnalysis.error || 'Не удалось выполнить AI анализ';
+                aiDetails.textContent = `Ошибка: ${errorMsg}\n\nДля использования Google AI:\n1. Получите новый API ключ на https://aistudio.google.com/\n2. Установите переменную окружения:\n   export GOOGLE_API_KEY="ваш_новый_ключ"\n3. Перезапустите backend сервер`;
+                return;
             }
             
-            // Формируем краткий отчет
+            // Определяем статус на основе вердикта и процента риска
+            const verdict = (aiAnalysis.verdict || 'неизвестно').toLowerCase();
+            const riskPercent = aiAnalysis.risk_percent || 0;
+            const provider = aiAnalysis.provider || 'unknown';
+            
             let statusText = '';
             let dotColor = '#4CAF50'; // green by default
             
-            if (risk === 'HIGH') {
+            if (verdict === 'опасно' || riskPercent >= 70) {
                 statusText = '⚠️ ОПАСНО';
                 dotColor = '#f44336'; // red
-            } else if (risk === 'MEDIUM') {
+            } else if (verdict === 'подозрительно' || (riskPercent >= 40 && riskPercent < 70)) {
                 statusText = '⚠️ ПРЕДУПРЕЖДЕНИЕ';
                 dotColor = '#ffaa00'; // orange
-            } else {
+            } else if (verdict === 'безопасно' || riskPercent < 40) {
                 statusText = '✓ БЕЗОПАСНО';
                 dotColor = '#4CAF50'; // green
+            } else {
+                statusText = '❓ НЕИЗВЕСТНО';
+                dotColor = '#666666'; // gray
             }
             
             aiText.textContent = statusText;
             aiDot.className = 'status-dot';
             aiDot.style.background = dotColor;
             
-            // Формируем детали с причинами
+            // Формируем детали с AI анализом
             const detailsLines = [];
-            if (reasons.length > 0) {
+            
+            // Добавляем риски, если есть
+            const risks = aiAnalysis.risks || [];
+            if (risks.length > 0) {
                 detailsLines.push('Причины:');
-                reasons.forEach((reason, idx) => {
-                    detailsLines.push(`${idx + 1}. ${reason}`);
+                risks.forEach((risk, idx) => {
+                    detailsLines.push(`${idx + 1}. ${risk}`);
                 });
-                
-                // Добавляем объяснение и заключение, если есть
-                if (item.explanation) {
-                    detailsLines.push('');
-                    detailsLines.push('Объяснение:');
-                    detailsLines.push(item.explanation);
+            }
+            
+            // Добавляем объяснение
+            if (aiAnalysis.explanation) {
+                if (detailsLines.length > 0) detailsLines.push('');
+                detailsLines.push('Объяснение:');
+                detailsLines.push(aiAnalysis.explanation);
+            }
+            
+            // Добавляем пункты безопасности
+            const safetyPoints = aiAnalysis.safety_points || [];
+            if (safetyPoints.length > 0) {
+                if (detailsLines.length > 0) detailsLines.push('');
+                detailsLines.push('Проверка безопасности:');
+                safetyPoints.forEach((point, idx) => {
+                    detailsLines.push(`${idx + 1}. ${point}`);
+                });
+            }
+            
+            // Добавляем заключение
+            if (aiAnalysis.conclusion) {
+                if (detailsLines.length > 0) detailsLines.push('');
+                detailsLines.push('Заключение:');
+                detailsLines.push(aiAnalysis.conclusion);
+            }
+            
+            // Добавляем информацию о статусе соединения и проверке адреса
+            if (aiAnalysis.connection_status || aiAnalysis.address_check) {
+                if (detailsLines.length > 0) detailsLines.push('');
+                detailsLines.push('Детали проверки:');
+                if (aiAnalysis.connection_status && aiAnalysis.connection_status !== 'неизвестно') {
+                    detailsLines.push(`Соединение: ${aiAnalysis.connection_status}`);
                 }
-                if (item.conclusion) {
-                    detailsLines.push('');
-                    detailsLines.push(`Заключение: ${item.conclusion}`);
+                if (aiAnalysis.address_check && aiAnalysis.address_check !== 'неизвестно') {
+                    detailsLines.push(`Адрес: ${aiAnalysis.address_check}`);
                 }
-            } else {
-                // Если нет причин, но есть объяснение - показываем его
-                if (item.explanation) {
-                    detailsLines.push('Анализ:');
-                    detailsLines.push(item.explanation);
-                    if (item.conclusion) {
-                        detailsLines.push('');
-                        detailsLines.push(`Заключение: ${item.conclusion}`);
-                    }
-                } else {
-                    detailsLines.push('Детальный анализ недоступен');
+                if (aiAnalysis.redirects && aiAnalysis.redirects !== 'неизвестно') {
+                    detailsLines.push(`Переходы: ${aiAnalysis.redirects}`);
                 }
+            }
+            
+            // Добавляем процент риска и провайдера
+            if (detailsLines.length > 0) detailsLines.push('');
+            detailsLines.push(`Риск: ${riskPercent}%`);
+            if (provider !== 'none') {
+                detailsLines.push(`AI: ${provider === 'google' ? 'Google AI' : provider}`);
+            }
+            
+            if (detailsLines.length === 0) {
+                detailsLines.push('Детальный анализ недоступен');
             }
             
             aiDetails.textContent = detailsLines.join('\n');
@@ -458,7 +505,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (errorMsg.includes('Failed to fetch') || errorMsg.includes('NetworkError')) {
                 aiDetails.textContent = '⚠️ Backend сервер не запущен! Запустите сервер на http://localhost:8000';
             } else {
-                aiDetails.textContent = 'Попробуйте позже или проверьте подключение к интернету';
+                aiDetails.textContent = `Ошибка: ${errorMsg}. Попробуйте позже или проверьте подключение к интернету.`;
             }
         }
     });

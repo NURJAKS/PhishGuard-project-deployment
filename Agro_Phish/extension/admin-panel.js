@@ -1,6 +1,6 @@
 'use strict';
 
-const API_BASE_URL = 'http://localhost:8002';
+const API_BASE_URL = 'http://localhost:8000';
 
 // Known hosting/cloud providers for risk analysis
 const KNOWN_HOSTING_PROVIDERS = [
@@ -293,12 +293,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData.detail || `HTTP ${res.status}`);
       }
-      showMessage(`Домен "${domain}" добавлен в черный список`, 'success');
+      const result = await res.json();
+      showMessage(result.message || `Домен "${domain}" добавлен в черный список`, 'success');
       addDomainInput.value = '';
       await loadBlacklist(); // Перезагружаем список
     } catch (e) {
       console.error('Error adding domain:', e);
-      showMessage(`Ошибка добавления домена: ${e.message}`, 'error');
+      let errorMsg = e.message;
+      if (errorMsg.includes('Failed to fetch') || errorMsg.includes('NetworkError')) {
+        errorMsg = `Не удалось подключиться к серверу. Убедитесь, что backend запущен на ${API_BASE_URL}`;
+      }
+      showMessage(`Ошибка добавления домена: ${errorMsg}`, 'error');
     }
   });
 
@@ -449,7 +454,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData.detail || `HTTP ${res.status}`);
       }
-      showMessage(`Домен "${domain}" добавлен в белый список`, 'success');
+      const result = await res.json();
+      showMessage(result.message || `Домен "${domain}" добавлен в белый список`, 'success');
       addWhitelistDomainInput.value = '';
       await loadWhitelist();
       
@@ -463,7 +469,11 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch (e) {
       console.error('Error adding domain to whitelist:', e);
-      showMessage(`Ошибка добавления домена: ${e.message}`, 'error');
+      let errorMsg = e.message;
+      if (errorMsg.includes('Failed to fetch') || errorMsg.includes('NetworkError')) {
+        errorMsg = `Не удалось подключиться к серверу. Убедитесь, что backend запущен на ${API_BASE_URL}`;
+      }
+      showMessage(`Ошибка добавления домена: ${errorMsg}`, 'error');
     }
   });
 
