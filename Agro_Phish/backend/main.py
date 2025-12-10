@@ -11,6 +11,8 @@ import os
 import logging
 from typing import List, Optional
 import re
+import subprocess
+import shutil
 
 # Configure logging
 logging.basicConfig(
@@ -35,6 +37,10 @@ import requests
 import uuid
 import hashlib
 from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+NIKTO_ROOT = BASE_DIR / "tools" / "nikto"
+NIKTO_PROGRAM = NIKTO_ROOT / "program" / "nikto.pl"
 
 app = FastAPI(
     title="PhishGuard API",
@@ -580,6 +586,75 @@ async def ai_scan(req: AiScanRequest):
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI scan error: {str(e)}")
+
+
+class VulnScanRequest(BaseModel):
+    url: str
+
+
+class VulnScanResponse(BaseModel):
+    status: str
+    target: str
+    output: str
+
+
+def _validate_scan_url(raw_url: str) -> str:
+    parsed = urlparse(raw_url.strip())
+    if not parsed.scheme or parsed.scheme not in ("http", "https"):
+        raise HTTPException(status_code=400, detail="Nikto поддерживает только http/https URL.")
+    if not parsed.netloc:
+        raise HTTPException(status_code=400, detail="Некорректный URL для сканирования.")
+    return raw_url.strip()
+
+
+def _ensure_nikto_available() -> str:
+    """Return path to perl binary and ensure Nikto files exist."""
+    if not NIKTO_PROGRAM.exists():
+        raise HTTPException(
+            status_code=500,
+            detail="Nikto не найден. Выполните git clone https://github.com/sullo/nikto.git Agro_Phish/tools/nikto"
+        )
+    perl_bin = shutil.which("perl")
+    if not perl_bin:
+        raise HTTPException(status_code=500, detail="Perl не установлен, Nikto требует perl.")
+    return perl_bin
+
+
+@app.post("/v1/vuln/nikto", response_model=VulnScanResponse)
+async def nikto_vuln_scan(req: VulnScanRequest):
+    """Запускает локальный Nikto против указанного URL и возвращает stdout/stderr."""
+    target = _validate_scan_url(req.url)
+    perl_bin = _ensure_nikto_available()
+
+    cmd = [
+        perl_bin,
+        str(NIKTO_PROGRAM),
+        "-ask", "no",
+        "-maxtime", "30s",
+        "-timeout", "10",
+        "-h", target,
+    ]
+
+    try:
+        completed = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            cwd=str(NIKTO_PROGRAM.parent),
+            timeout=60
+        )
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail="Nikto scan timed out after 60s")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Nikto execution error: {str(e)}")
+
+    output = (completed.stdout or "") + ("\n" + completed.stderr if completed.stderr else "")
+    output = output.strip() or "Nikto завершил работу без вывода."
+    if len(output) > 12000:
+        output = output[:12000] + "\n...output truncated..."
+
+    status = "ok" if completed.returncode == 0 else f"error:{completed.returncode}"
+    return VulnScanResponse(status=status, target=target, output=output)
 
 
 class FullAuditRequest(BaseModel):

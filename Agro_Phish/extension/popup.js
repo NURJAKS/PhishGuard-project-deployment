@@ -37,6 +37,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     const aiDot = document.getElementById('ai-dot');
     const aiText = document.getElementById('ai-text');
     const aiDetails = document.getElementById('ai-details');
+    const vulnScanBtn = document.getElementById('vuln-scan');
+    const vulnScanStatus = document.getElementById('vulnScanStatus');
+    const vulnDot = document.getElementById('vuln-dot');
+    const vulnText = document.getElementById('vuln-text');
+    const vulnDetails = document.getElementById('vuln-details');
     const checkDnsBtn = document.getElementById('check-dns');
     const dnsCheckStatus = document.getElementById('dnsCheckStatus');
     const dnsDot = document.getElementById('dns-dot');
@@ -507,6 +512,37 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else {
                 aiDetails.textContent = `Ошибка: ${errorMsg}. Попробуйте позже или проверьте подключение к интернету.`;
             }
+        }
+    });
+
+    vulnScanBtn.addEventListener('click', async () => {
+        if (!currentTab || !isAnalyzableUrl(currentTab.url)) {
+            showError('Vuln Scan доступен только для HTTP/HTTPS страниц');
+            return;
+        }
+        vulnScanStatus.style.display = 'block';
+        vulnText.textContent = 'Запуск Nikto...';
+        vulnDot.className = 'status-dot';
+        vulnDot.style.background = '#666666';
+        vulnDetails.textContent = '';
+        try {
+            const resp = await directApiCall('/v1/vuln/nikto', { url: currentTab.url });
+            vulnText.textContent = '✓ Nikto scan завершен';
+            vulnDot.className = 'status-dot';
+            vulnDot.classList.add('active');
+            const statusLine = resp?.status ? `Статус: ${resp.status}\n` : '';
+            const output = resp?.output || 'Нет данных от Nikto.';
+            vulnDetails.textContent = statusLine + output;
+        } catch (e) {
+            vulnText.textContent = '❌ Не удалось запустить Nikto';
+            vulnDot.className = 'status-dot inactive';
+            const msg = e?.message || e.toString();
+            if (msg === 'BACKEND_NOT_RUNNING') {
+                vulnDetails.textContent = '⚠️ Backend не запущен. Стартуйте backend на http://localhost:8000';
+            } else {
+                vulnDetails.textContent = `Ошибка: ${msg}`;
+            }
+            showError(vulnDetails.textContent);
         }
     });
 

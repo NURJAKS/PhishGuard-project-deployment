@@ -236,6 +236,7 @@
 
             <div class="action-buttons">
                 <button id="ai-scan" class="btn">AI Scan</button>
+                <button id="vuln-scan" class="btn">Vuln Scan</button>
             </div>
 
 
@@ -267,6 +268,14 @@
                     <div id="ai-text">Сканирование...</div>
                 </div>
                 <div id="ai-details" class="muted" style="font-size:12px; white-space:pre-wrap;"></div>
+            </div>
+
+            <div id="vulnScanStatus" class="status-card" style="display:none;">
+                <div class="status-indicator">
+                    <div id="vuln-dot" class="status-dot"></div>
+                    <div id="vuln-text">Запуск Nikto...</div>
+                </div>
+                <div id="vuln-details" class="muted" style="font-size:11px; white-space:pre-wrap; margin-top:8px;"></div>
             </div>
 
             <div id="dnsCheckStatus" class="status-card" style="display:none;">

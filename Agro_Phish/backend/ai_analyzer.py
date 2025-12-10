@@ -768,12 +768,10 @@ def _google_ai_full_audit(audit_data: Dict[str, Any], url: str) -> Dict[str, Any
         text = response.text.strip()
         logger.info(f"[FULL AUDIT] Response received ({len(text)} chars)")
         
-        # Извлекаем JSON
         if "```json" in text:
             text = text.split("```json")[1].split("```")[0].strip()
         elif "```" in text:
             text = text.split("```")[1].split("```")[0].strip()
-        
         try:
             parsed = json.loads(text)
             parsed["provider"] = "google"

@@ -3,10 +3,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from models import Base
 
-# Создаем путь к базе данных
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./database/phishguard.db")
 
-# Создаем директорию для базы данных если её нет
 db_dir = os.path.dirname(DATABASE_URL.replace("sqlite:///", ""))
 if not os.path.exists(db_dir):
     os.makedirs(db_dir)

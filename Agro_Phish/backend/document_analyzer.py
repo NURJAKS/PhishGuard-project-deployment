@@ -28,7 +28,6 @@ try:
 except ImportError:
     DOCX_MAMMOTH_AVAILABLE = False
 
-# Try to import AI analyzer functions
 try:
     from ai_analyzer import _openrouter_analyze, _google_ai_analyze
     AI_AVAILABLE = True
@@ -135,13 +134,12 @@ def extract_banking_data(text: str) -> Dict[str, Any]:
             extracted['bank_name'] = match.group(1)
             break
     
-    # Используем AI для дополнительного извлечения данных
     if AI_AVAILABLE and len(text) > 100:
         try:
             ai_prompt = f"""Проанализируй следующий текст документа и извлеки банковские данные в формате JSON. 
 Ищи: название банка, номер счета, номер карты, IBAN, БИК, ИНН, сумму, дату, имя клиента, номер договора.
 Если данных нет, верни пустой объект {{}}.
-
+nni 
 Текст документа:
 {text[:5000]}
 
@@ -224,9 +222,7 @@ def analyze_document_for_phishing(text: str) -> Dict[str, Any]:
 def analyze_document(file_content: bytes, filename: str, file_type: str) -> Dict[str, Any]:
     """Основная функция анализа документа"""
     analysis_id = str(uuid.uuid4())
-    
     try:
-        # Извлекаем текст в зависимости от типа файла
         if file_type == 'application/pdf':
             text_content = extract_text_from_pdf(file_content)
         elif file_type in ['application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']:
