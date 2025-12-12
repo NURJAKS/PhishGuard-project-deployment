@@ -52,7 +52,7 @@ k<!DOCTYPE html>
     <h1>PhishGuard – Локальный Dashboard</h1>
   </header>
   <div class="wrap">
-    <div class="toolbar" style="gap:14px; flex-wrap: wrap;">
+      <div class="toolbar" style="gap:14px; flex-wrap: wrap;">
       <button id="refresh">Обновить</button>
       <input id="search" placeholder="Поиск по URL..." style="flex:1; min-width:240px; background:#111233; color:#fff; border:1px solid #26284a; border-radius:8px; padding:10px 12px;" />
       <select id="actionFilter" style="background:#111233; color:#fff; border:1px solid #26284a; border-radius:8px; padding:10px 12px;">
@@ -61,6 +61,7 @@ k<!DOCTYPE html>
         <option value="warn">WARN</option>
         <option value="block">BLOCK</option>
       </select>
+      <button id="gobuster-scan" style="background:#6496c8; border:none; padding:10px 14px; border-radius:8px; cursor:pointer; font-weight:600; color:#fff;">Gobuster</button>
       <span id="api-url" class="muted"></span>
     </div>
 
@@ -119,3 +120,5 @@ k<!DOCTYPE html>
 <script src="dashboard.js"></script>
 </body>
 </html>
+
+

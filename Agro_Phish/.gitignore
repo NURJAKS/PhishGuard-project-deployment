@@ -31,3 +31,4 @@ backend/.uvicorn_pid
 # Docker
 *.pid
 model.pt
+SecLists/

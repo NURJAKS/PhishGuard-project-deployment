@@ -14,6 +14,38 @@ document.addEventListener('DOMContentLoaded', () => {
         window.close();
     });
     
+    // Gobuster button handler
+    const gobusterBtn = document.getElementById('gobuster-scan');
+    if (gobusterBtn) {
+        gobusterBtn.addEventListener('click', async () => {
+            const url = prompt('Введите URL для сканирования Gobuster:');
+            if (!url) return;
+            try {
+                const candidates = ['http://localhost:8000', 'http://127.0.0.1:8000'];
+                let base = candidates[0];
+                for (const b of candidates) {
+                    try {
+                        const ctrl = new AbortController();
+                        const tid = setTimeout(() => ctrl.abort(), 1000);
+                        await fetch(`${b}/health`, { signal: ctrl.signal });
+                        clearTimeout(tid);
+                        base = b; break;
+                    } catch (_) {}
+                }
+                const resp = await fetch(`${base}/v1/vuln/gobuster`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url })
+                });
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                const data = await resp.json();
+                alert(`Gobuster завершен!\nСтатус: ${data.status}\n\nВывод:\n${data.output.substring(0, 500)}...`);
+            } catch (e) {
+                alert(`Ошибка: ${e.message}`);
+            }
+        });
+    }
+    
     async function loadAnalysis() {
         if (!analysisId) {
             showError('ID анализа не указан');

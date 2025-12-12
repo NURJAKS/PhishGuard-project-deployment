@@ -321,6 +321,27 @@ document.addEventListener('DOMContentLoaded', () => {
   refreshBtn.addEventListener('click', refreshAll);
   searchInput.addEventListener('input', () => renderTable(applyFilters(incidentsCache)));
   actionFilter.addEventListener('change', () => renderTable(applyFilters(incidentsCache)));
+  
+  // Gobuster button handler
+  const gobusterBtn = document.getElementById('gobuster-scan');
+  if (gobusterBtn) {
+    gobusterBtn.addEventListener('click', async () => {
+      const url = prompt('Введите URL для сканирования Gobuster:');
+      if (!url) return;
+      try {
+        const resp = await fetch(`${API_BASE_URL}/v1/vuln/gobuster`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        alert(`Gobuster завершен!\nСтатус: ${data.status}\n\nВывод:\n${data.output.substring(0, 500)}...`);
+      } catch (e) {
+        alert(`Ошибка: ${e.message}`);
+      }
+    });
+  }
   // Streamlit отделён; локальный dashboard работает автономно
 
   refreshAll();

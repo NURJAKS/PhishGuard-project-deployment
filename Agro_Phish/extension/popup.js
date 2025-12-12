@@ -1,7 +1,7 @@
 // PhishGuard Popup Script
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('PhishGuard popup loaded');
-    
+
     // Элементы DOM
     const loadingDiv = document.getElementById('loading');
     const errorDiv = document.getElementById('error');
@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const currentUrlDiv = document.getElementById('current-url');
     const totalBlocked = document.getElementById('total-blocked');
     const totalWarned = document.getElementById('total-warned');
-    
+
     // Кнопки
     const openDashboardBtn = document.getElementById('open-dashboard');
     const openAdminPanelBtn = document.getElementById('open-admin-panel');
@@ -42,6 +42,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const vulnDot = document.getElementById('vuln-dot');
     const vulnText = document.getElementById('vuln-text');
     const vulnDetails = document.getElementById('vuln-details');
+    const gobusterBtn = document.getElementById('gobuster-scan');
+    const jsdirbusterBtn = document.getElementById('jsdirbuster-scan');
     const checkDnsBtn = document.getElementById('check-dns');
     const dnsCheckStatus = document.getElementById('dnsCheckStatus');
     const dnsDot = document.getElementById('dns-dot');
@@ -63,12 +65,86 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (lower.startsWith('chrome-extension://')) return false;
         return lower.startsWith('http://') || lower.startsWith('https://');
     }
-    
+
+    // Функция для форматирования вывода Gobuster
+    function formatGobusterOutput(output) {
+        if (!output || !output.trim()) {
+            return '<div class="gobuster-report"><pre id="gobuster-output">No output available</pre></div>';
+        }
+
+        let cleaned = output
+            .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "") // Убираем ANSI
+            .replace(/Progress:.*\n/g, "") // Убираем Progress
+            .replace(/^=+\s*$/gm, "") // Убираем "====="
+            .replace(/^\s*[\r\n]/gm, ""); // Убираем пустые линии
+
+        const lines = cleaned.split('\n');
+        let html = '<div class="gobuster-report">';
+        html += '<h3 style="margin-top:0; font-size:14px; border-bottom:1px solid #444; padding-bottom:5px;">Gobuster Report</h3>';
+        html += '<pre id="gobuster-output" style="max-height:300px; overflow-y:auto; background:#111; padding:10px; border-radius:4px; font-family:monospace; font-size:11px;">';
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+
+            // Скрываем абсолютный путь к словарю
+            if (line.includes('Wordlist:')) {
+                const parts = line.split('Wordlist:');
+                if (parts[1]) {
+                    const filename = parts[1].trim().split(/[/\\]/).pop(); // Берем только имя файла
+                    html += `<span class="gobuster-label">Wordlist:</span> <span class="gobuster-value">${filename}</span>\n`;
+                    continue;
+                }
+            }
+
+            // Подсветка статусов
+            let style = 'color: #ccc;';
+            if (line.includes('(Status: 200)')) {
+                style = 'color: #4CAF50; font-weight:bold;'; // Зеленый
+            } else if (line.includes('(Status: 403)')) {
+                style = 'color: #f44336;'; // Красный
+            } else if (line.includes('(Status: 401)')) {
+                style = 'color: #ff9800;'; // Оранжевый
+            } else if (line.match(/\(Status: 5\d{2}\)/)) {
+                style = 'color: #800000; font-weight:bold;'; // Бордовый
+            }
+
+            // Раскрашиваем всю строку, если это результат
+            if (line.startsWith('/') || line.startsWith('http')) {
+                html += `<span style="${style}">${escapeHtml(line)}</span>\n`;
+            } else if (line.includes('Target URL:') || line.includes('Threads:')) {
+                // Метаданные
+                html += `<span style="color:#888;">${escapeHtml(line)}</span>\n`;
+            } else if (line.includes('Result:') || line.includes('Gobuster Scan Summary')) {
+                html += `<strong style="color:#eee; display:block; margin-top:10px; margin-bottom:5px;">${escapeHtml(line)}</strong>`;
+            } else {
+                html += `${escapeHtml(line)}\n`;
+            }
+        }
+
+        html += '</pre></div>';
+
+        // Автопрокрутка (добавляем скрипт после вставки)
+        setTimeout(() => {
+            const el = document.getElementById('gobuster-output');
+            if (el) el.scrollTop = el.scrollHeight;
+        }, 100);
+
+        return html;
+    }
+
+    // Функция для экранирования HTML
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
     // Получаем текущую вкладку
     try {
         const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
         currentTab = tabs[0];
-        
+
         if (currentTab) {
             currentUrlDiv.textContent = currentTab.url;
             // Проверяем только сайты
@@ -79,10 +155,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (error) {
         showError('Не удалось получить информацию о странице');
     }
-    
+
     // Загружаем статистику
     await loadStats();
-    
+
     // Обработчики событий
     openDashboardBtn.addEventListener('click', async () => {
         // Сначала пытаемся открыть Streamlit (если запущен)
@@ -99,16 +175,151 @@ document.addEventListener('DOMContentLoaded', async () => {
             chrome.tabs.create({ url: localDashboardUrl });
         }
     });
-    
+
     openAdminPanelBtn.addEventListener('click', () => {
         const adminPanelUrl = chrome.runtime.getURL('admin-panel.html');
         chrome.tabs.create({ url: adminPanelUrl });
     });
-    
+
     openDocumentsBtn.addEventListener('click', () => {
         chrome.tabs.create({ url: 'http://localhost:8000/documents' });
     });
-    
+
+    // Gobuster button handler - через background.js
+    if (gobusterBtn) {
+        gobusterBtn.addEventListener('click', () => {
+            if (!currentTab || !isAnalyzableUrl(currentTab.url)) {
+                showError('Не удалось получить URL для сканирования');
+                return;
+            }
+            vulnScanStatus.style.display = 'block';
+            vulnText.textContent = 'Запуск Gobuster...';
+            vulnDot.className = 'status-dot';
+            vulnDot.style.background = '#666666';
+            vulnDetails.textContent = 'Подключение к backend...';
+
+            // Используем промис для обработки ответа
+            new Promise((resolve, reject) => {
+                try {
+                    chrome.runtime.sendMessage({
+                        type: 'RUN_GOBUSTER',
+                        url: currentTab.url
+                    }, (response) => {
+                        // Проверяем ошибки Chrome runtime
+                        if (chrome.runtime.lastError) {
+                            reject(new Error(chrome.runtime.lastError.message || 'Ошибка связи с background script'));
+                            return;
+                        }
+                        // Проверяем что ответ получен
+                        if (response === undefined || response === null) {
+                            reject(new Error('Не получен ответ от background script. Возможно, порт закрылся.'));
+                            return;
+                        }
+                        resolve(response);
+                    });
+                } catch (e) {
+                    reject(e);
+                }
+            }).then((response) => {
+                // Обработка успешного ответа
+                if (response && response.error) {
+                    vulnText.textContent = '❌ Gobuster не удалось запустить';
+                    vulnDot.className = 'status-dot inactive';
+                    vulnDetails.textContent = response.error || 'Неизвестная ошибка';
+                    return;
+                }
+
+                if (response && response.success && response.data) {
+                    const data = response.data;
+                    vulnText.textContent = data.status === 'ok' ? '✓ Gobuster завершен' : `Gobuster статус: ${data.status}`;
+                    vulnDot.className = 'status-dot';
+                    vulnDot.style.background = data.status === 'ok' ? '#4CAF50' : '#ffaa00';
+
+                    // Форматируем вывод Gobuster для красивого отображения
+                    const formattedOutput = formatGobusterOutput(data.output || 'Нет вывода');
+                    vulnDetails.innerHTML = formattedOutput;
+                } else {
+                    vulnText.textContent = '❌ Неверный формат ответа';
+                    vulnDot.className = 'status-dot inactive';
+                    vulnDetails.textContent = 'Ответ от сервера не содержит ожидаемых данных';
+                }
+            }).catch((error) => {
+                // Обработка ошибок
+                console.error('Gobuster error:', error);
+                vulnText.textContent = '❌ Gobuster не удалось запустить';
+                vulnDot.className = 'status-dot inactive';
+                const errorMsg = error.message || error.toString() || 'Неизвестная ошибка';
+                vulnDetails.textContent = errorMsg;
+            });
+        });
+    }
+
+    // JSDirbuster button handler - через background.js
+    if (jsdirbusterBtn) {
+        jsdirbusterBtn.addEventListener('click', () => {
+            if (!currentTab || !isAnalyzableUrl(currentTab.url)) {
+                showError('Не удалось получить URL для сканирования');
+                return;
+            }
+            vulnScanStatus.style.display = 'block';
+            vulnText.textContent = 'Запуск JSDirbuster...';
+            vulnDot.className = 'status-dot';
+            vulnDot.style.background = '#666666';
+            vulnDetails.textContent = 'Подключение к backend...';
+
+            // Используем промис для обработки ответа
+            new Promise((resolve, reject) => {
+                try {
+                    chrome.runtime.sendMessage({
+                        type: 'RUN_JSDIRBUSTER',
+                        url: currentTab.url
+                    }, (response) => {
+                        // Проверяем ошибки Chrome runtime
+                        if (chrome.runtime.lastError) {
+                            reject(new Error(chrome.runtime.lastError.message || 'Ошибка связи с background script'));
+                            return;
+                        }
+                        // Проверяем что ответ получен
+                        if (response === undefined || response === null) {
+                            reject(new Error('Не получен ответ от background script. Возможно, порт закрылся.'));
+                            return;
+                        }
+                        resolve(response);
+                    });
+                } catch (e) {
+                    reject(e);
+                }
+            }).then((response) => {
+                // Обработка успешного ответа
+                if (response && response.error) {
+                    vulnText.textContent = '❌ JSDirbuster не удалось запустить';
+                    vulnDot.className = 'status-dot inactive';
+                    vulnDetails.textContent = response.error || 'Неизвестная ошибка';
+                    return;
+                }
+
+                if (response && response.success && response.data) {
+                    const data = response.data;
+                    vulnText.textContent = data.status === 'ok' ? '✓ JSDirbuster завершен' : `JSDirbuster статус: ${data.status}`;
+                    vulnDot.className = 'status-dot';
+                    vulnDot.style.background = data.status === 'ok' ? '#4CAF50' : '#ffaa00';
+                    vulnDetails.textContent = data.output || 'Нет вывода';
+                } else {
+                    vulnText.textContent = '❌ Неверный формат ответа';
+                    vulnDot.className = 'status-dot inactive';
+                    vulnDetails.textContent = 'Ответ от сервера не содержит ожидаемых данных';
+                }
+            }).catch((error) => {
+                // Обработка ошибок
+                console.error('JSDirbuster error:', error);
+                vulnText.textContent = '❌ JSDirbuster не удалось запустить';
+                vulnDot.className = 'status-dot inactive';
+                const errorMsg = error.message || error.toString() || 'Неизвестная ошибка';
+                vulnDetails.textContent = errorMsg;
+            });
+        });
+    }
+
     clearCacheBtn.addEventListener('click', clearCache);
     // Маскирование PAN-подобных чисел
     function maskPan(text) {
@@ -134,7 +345,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else {
             paymentDot.style.background = '#666666';
         }
-        
+
         // Показываем детали рисков если они есть
         if (details && state !== 'safe') {
             if (details.consequences) {
@@ -175,28 +386,28 @@ document.addEventListener('DOMContentLoaded', async () => {
             try {
                 const u = new URL(pageUrl);
                 if (u.protocol !== 'https:') reasons.push('no_https');
-            } catch (_) {}
-            const tokens = ['card','cardnumber','card_number','pan','cvv','cvc','expiry','mm/yy','name_on_card','visa','mastercard','paypal'];
+            } catch (_) { }
+            const tokens = ['card', 'cardnumber', 'card_number', 'pan', 'cvv', 'cvc', 'expiry', 'mm/yy', 'name_on_card', 'visa', 'mastercard', 'paypal'];
             let containsCard = false;
             let suspiciousAction = false;
             forms.forEach(f => {
-                const action = (f.getAttribute('action')||'').trim();
+                const action = (f.getAttribute('action') || '').trim();
                 if (!action || action.startsWith('mailto:') || action.startsWith('data:')) suspiciousAction = true;
                 try {
                     const a = new URL(action, pageUrl);
                     const p = new URL(pageUrl);
                     if (a.host && p.host && a.host !== p.host) suspiciousAction = true;
-                } catch (_) {}
+                } catch (_) { }
                 const inputs = Array.from(f.querySelectorAll('input,select,textarea'));
                 for (const inp of inputs) {
-                    const v = ((inp.name||'')+' '+(inp.id||'')+' '+(inp.placeholder||'')+' '+(inp.type||'')).toLowerCase();
+                    const v = ((inp.name || '') + ' ' + (inp.id || '') + ' ' + (inp.placeholder || '') + ' ' + (inp.type || '')).toLowerCase();
                     if (tokens.some(t => v.includes(t))) { containsCard = true; break; }
                 }
             });
             if (containsCard) reasons.push('contains_card_fields');
             if (suspiciousAction) reasons.push('suspicious_form_action');
-            const weights = { no_https:0.3, contains_card_fields:0.4, suspicious_form_action:0.25 };
-            let score = 0; reasons.forEach(r => score += (weights[r]||0));
+            const weights = { no_https: 0.3, contains_card_fields: 0.4, suspicious_form_action: 0.25 };
+            let score = 0; reasons.forEach(r => score += (weights[r] || 0));
             score = Math.min(1, score);
             const safe = score < 0.6;
             return { safe, score, reasons, explain };
@@ -210,7 +421,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!currentTab || !isAnalyzableUrl(currentTab.url)) {
             return { hasPaymentForm: false, safe: true, message: 'Оплата безопасна - платежная форма не обнаружена' };
         }
-        
+
         try {
             const htmlFull = await getPageHtml(currentTab.id);
             const snippet = maskPan(htmlFull).slice(0, 30000);
@@ -223,21 +434,21 @@ document.addEventListener('DOMContentLoaded', async () => {
                     await fetch(`${b}/health`, { signal: ctrl.signal });
                     clearTimeout(tid);
                     base = b; break;
-                } catch (_) {}
+                } catch (_) { }
             }
-            
+
             const payload = {
                 request_id: crypto.randomUUID(),
                 url: currentTab.url,
                 html_snippet: snippet,
                 meta: { user_agent: navigator.userAgent }
             };
-            
+
             const resp = await fetch(`${base}/analyze_payment`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
-            
+
             if (!resp.ok) {
                 // Если backend недоступен, делаем локальную проверку
                 const local = clientAnalyzeHtml(snippet, currentTab.url);
@@ -250,10 +461,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     message: local.safe ? 'Оплата безопасна' : 'Обнаружены риски при оплате'
                 };
             }
-            
+
             const data = await resp.json();
             const hasPaymentForm = data.reasons && data.reasons.includes('contains_card_fields');
-            
+
             return {
                 hasPaymentForm: hasPaymentForm,
                 safe: data.safe,
@@ -299,7 +510,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     await fetch(`${b}/health`, { signal: ctrl.signal });
                     clearTimeout(tid);
                     base = b; break;
-                } catch (_) {}
+                } catch (_) { }
             }
             const resp = await fetch(`${base}/v1/scan/secrets`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -310,7 +521,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const total = data.total_findings || 0;
             const scripts = data.scanned_scripts || 0;
             const results = data.results || [];
-            
+
             // Упрощенный результат для пользователя
             if (total > 0) {
                 secretText.textContent = `⚠️ Найдено ${total} подозрительных элементов`;
@@ -323,7 +534,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 secretDot.classList.add('active');
                 secretSummary.textContent = `Проверено ${scripts} элементов на странице. Ничего подозрительного не найдено.`;
             }
-            
+
             // Отдельный раздел со ссылками (показываем только если есть результаты)
             if (results.length > 0) {
                 const linksHtml = results.map((r, idx) => {
@@ -371,13 +582,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                     await fetch(`${b}/health`, { signal: ctrl.signal });
                     clearTimeout(tid);
                     base = b; break;
-                } catch (_) {}
+                } catch (_) { }
             }
-            
+
             // Получаем HTML страницы для анализа
             const htmlFull = await getPageHtml(currentTab.id);
             const snippet = maskPan(htmlFull).slice(0, 30000);
-            
+
             // Вызываем /analyze_payment который использует Google AI
             const payload = {
                 request_id: crypto.randomUUID(),
@@ -385,26 +596,26 @@ document.addEventListener('DOMContentLoaded', async () => {
                 html_snippet: snippet,
                 meta: { user_agent: navigator.userAgent }
             };
-            
+
             const resp = await fetch(`${base}/analyze_payment`, {
-                method: 'POST', 
+                method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
-            
+
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const data = await resp.json();
-            
+
             // Извлекаем AI анализ из explain.ai_analysis
             const aiAnalysis = data.explain?.ai_analysis;
-            
+
             if (!aiAnalysis) {
                 aiText.textContent = '❌ AI анализ недоступен';
                 aiDot.className = 'status-dot inactive';
                 aiDetails.textContent = 'Не удалось выполнить AI анализ. Проверьте подключение к интернету и настройки API ключа.\n\nДля использования Google AI:\n1. Получите новый API ключ на https://aistudio.google.com/\n2. Установите переменную окружения:\n   export GOOGLE_API_KEY="ваш_новый_ключ"\n3. Перезапустите backend сервер';
                 return;
             }
-            
+
             // Проверяем, есть ли ошибка в анализе
             if (aiAnalysis.error || (aiAnalysis.provider === 'none' && aiAnalysis.verdict === 'неизвестно')) {
                 aiText.textContent = '⚠️ AI анализ не выполнен';
@@ -413,15 +624,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 aiDetails.textContent = `Ошибка: ${errorMsg}\n\nДля использования Google AI:\n1. Получите новый API ключ на https://aistudio.google.com/\n2. Установите переменную окружения:\n   export GOOGLE_API_KEY="ваш_новый_ключ"\n3. Перезапустите backend сервер`;
                 return;
             }
-            
+
             // Определяем статус на основе вердикта и процента риска
             const verdict = (aiAnalysis.verdict || 'неизвестно').toLowerCase();
             const riskPercent = aiAnalysis.risk_percent || 0;
             const provider = aiAnalysis.provider || 'unknown';
-            
+
             let statusText = '';
             let dotColor = '#4CAF50'; // green by default
-            
+
             if (verdict === 'опасно' || riskPercent >= 70) {
                 statusText = '⚠️ ОПАСНО';
                 dotColor = '#f44336'; // red
@@ -435,14 +646,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 statusText = '❓ НЕИЗВЕСТНО';
                 dotColor = '#666666'; // gray
             }
-            
+
             aiText.textContent = statusText;
             aiDot.className = 'status-dot';
             aiDot.style.background = dotColor;
-            
+
             // Формируем детали с AI анализом
             const detailsLines = [];
-            
+
             // Добавляем риски, если есть
             const risks = aiAnalysis.risks || [];
             if (risks.length > 0) {
@@ -451,14 +662,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                     detailsLines.push(`${idx + 1}. ${risk}`);
                 });
             }
-            
+
             // Добавляем объяснение
             if (aiAnalysis.explanation) {
                 if (detailsLines.length > 0) detailsLines.push('');
                 detailsLines.push('Объяснение:');
                 detailsLines.push(aiAnalysis.explanation);
             }
-            
+
             // Добавляем пункты безопасности
             const safetyPoints = aiAnalysis.safety_points || [];
             if (safetyPoints.length > 0) {
@@ -468,14 +679,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                     detailsLines.push(`${idx + 1}. ${point}`);
                 });
             }
-            
+
             // Добавляем заключение
             if (aiAnalysis.conclusion) {
                 if (detailsLines.length > 0) detailsLines.push('');
                 detailsLines.push('Заключение:');
                 detailsLines.push(aiAnalysis.conclusion);
             }
-            
+
             // Добавляем информацию о статусе соединения и проверке адреса
             if (aiAnalysis.connection_status || aiAnalysis.address_check) {
                 if (detailsLines.length > 0) detailsLines.push('');
@@ -490,18 +701,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                     detailsLines.push(`Переходы: ${aiAnalysis.redirects}`);
                 }
             }
-            
+
             // Добавляем процент риска и провайдера
             if (detailsLines.length > 0) detailsLines.push('');
             detailsLines.push(`Риск: ${riskPercent}%`);
             if (provider !== 'none') {
                 detailsLines.push(`AI: ${provider === 'google' ? 'Google AI' : provider}`);
             }
-            
+
             if (detailsLines.length === 0) {
                 detailsLines.push('Детальный анализ недоступен');
             }
-            
+
             aiDetails.textContent = detailsLines.join('\n');
         } catch (e) {
             aiText.textContent = '❌ Не удалось проверить сайт';
@@ -547,7 +758,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // ==================== DNS Check Functions ====================
-    
+
     // Known hosting/cloud providers
     const KNOWN_HOSTING_PROVIDERS = [
         'amazon', 'aws', 'digitalocean', 'linode', 'vultr', 'ovh', 'hetzner',
@@ -555,14 +766,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         'godaddy', 'hostgator', 'bluehost', 'namecheap', 'dreamhost', 'hostinger',
         'ionos', 'contabo', 'scaleway', 'upcloud', 'kamatera', 'rackspace'
     ];
-    
+
     // Known residential/ISP providers
     const KNOWN_ISP_PROVIDERS = [
         'comcast', 'verizon', 'at&t', 'spectrum', 'cox', 'centurylink',
         'rostelecom', 'beeline', 'megafon', 'mts', 'tele2', 'yota',
         'kazakhtelecom', 'kcell', 'activ', 'altel', 'tele2.kz'
     ];
-    
+
     // Cloudflare DNS-over-HTTPS query
     async function queryCloudflare(domain, type = 'A') {
         try {
@@ -577,7 +788,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return null;
         }
     }
-    
+
     // Google DNS fallback
     async function queryGoogleDns(domain, type = 'A') {
         try {
@@ -590,7 +801,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return null;
         }
     }
-    
+
     // Query DNS with fallback
     async function queryDns(domain, type = 'A') {
         let result = await queryCloudflare(domain, type);
@@ -599,7 +810,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         return result;
     }
-    
+
     // Get IP geolocation from ipinfo.io
     async function getIpInfo(ip) {
         try {
@@ -611,12 +822,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             return null;
         }
     }
-    
+
     // Analyze risk based on IP info
     function analyzeRisk(ipInfo, domain) {
         const risks = [];
         let riskScore = 0;
-        
+
         if (!ipInfo) {
             return {
                 level: 'medium',
@@ -624,33 +835,33 @@ document.addEventListener('DOMContentLoaded', async () => {
                 details: ['Не удалось получить информацию о сервере']
             };
         }
-        
+
         const org = (ipInfo.org || '').toLowerCase();
         const hostname = (ipInfo.hostname || '').toLowerCase();
-        
+
         // Check if it's a known hosting provider
-        const isHosting = KNOWN_HOSTING_PROVIDERS.some(provider => 
+        const isHosting = KNOWN_HOSTING_PROVIDERS.some(provider =>
             org.includes(provider) || hostname.includes(provider)
         );
-        
+
         // Check if it's a known ISP (residential)
-        const isResidential = KNOWN_ISP_PROVIDERS.some(provider => 
+        const isResidential = KNOWN_ISP_PROVIDERS.some(provider =>
             org.includes(provider) || hostname.includes(provider)
         );
-        
+
         if (isHosting) {
             risks.push('✓ Размещен на профессиональном хостинге');
         } else if (isResidential) {
             risks.push('⚠️ IP принадлежит домашнему провайдеру (ISP)');
             riskScore += 30;
         }
-        
+
         // Check for VPN/Proxy indicators
         if (org.includes('vpn') || org.includes('proxy') || org.includes('tunnel')) {
             risks.push('⚠️ Возможно использование VPN/Proxy');
             riskScore += 20;
         }
-        
+
         // Determine risk level
         let riskLevel = 'low';
         if (riskScore >= 40) {
@@ -658,7 +869,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else if (riskScore >= 20) {
             riskLevel = 'medium';
         }
-        
+
         // Generate badge and summary
         let badge, summary;
         switch (riskLevel) {
@@ -674,7 +885,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 badge = '🟢 Низкий риск';
                 summary = 'Сайт размещен на надежной инфраструктуре';
         }
-        
+
         return {
             level: riskLevel,
             badge: badge,
@@ -684,25 +895,25 @@ document.addEventListener('DOMContentLoaded', async () => {
             isResidential: isResidential
         };
     }
-    
+
     // Format IP address
     function formatIP(ip) {
         const isIPv6 = ip.includes(':');
         const label = isIPv6 ? 'IPv6' : 'IPv4';
         return `<span style="display:inline-block; background:rgba(255,255,255,0.1); padding:2px 6px; border-radius:3px; margin:2px 4px 2px 0; font-size:11px; font-family:monospace;">${label}: ${ip}</span>`;
     }
-    
+
     // Main DNS check function
     checkDnsBtn.addEventListener('click', async () => {
         if (!currentTab || !isAnalyzableUrl(currentTab.url)) {
             showError('DNS проверка доступна только для HTTP/HTTPS страниц');
             return;
         }
-        
+
         try {
             const url = new URL(currentTab.url);
             const domain = url.hostname;
-            
+
             // Show DNS check panel
             dnsCheckStatus.style.display = 'block';
             dnsText.textContent = 'Проверка DNS...';
@@ -714,48 +925,48 @@ document.addEventListener('DOMContentLoaded', async () => {
             dnsMx.style.display = 'none';
             dnsGeo.style.display = 'none';
             dnsHosting.style.display = 'none';
-            
+
             // Query A records (IPv4)
             const aRecords = await queryDns(domain, 'A');
-            
+
             // Query AAAA records (IPv6)
             const aaaaRecords = await queryDns(domain, 'AAAA');
-            
+
             // Query MX records
             const mxRecords = await queryDns(domain, 'MX');
-            
+
             // Collect all IPs
             const ipv4List = aRecords?.Answer?.filter(r => r.type === 1).map(r => r.data) || [];
             const ipv6List = aaaaRecords?.Answer?.filter(r => r.type === 28).map(r => r.data) || [];
             const allIPs = [...ipv4List, ...ipv6List];
-            
+
             // Get MX records
             const mxList = mxRecords?.Answer?.filter(r => r.type === 15).map(r => {
                 const parts = r.data.split(' ');
                 return { priority: parts[0], server: parts[1] || r.data };
             }) || [];
-            
+
             // Update IPs display
             if (allIPs.length > 0) {
-                dnsIps.innerHTML = '<strong style="opacity:0.8;">IP адреса:</strong><br>' + 
+                dnsIps.innerHTML = '<strong style="opacity:0.8;">IP адреса:</strong><br>' +
                     allIPs.map(ip => formatIP(ip)).join(' ');
             } else {
                 dnsIps.innerHTML = '<span style="opacity:0.6;">IP адреса не найдены</span>';
             }
-            
+
             // Update MX records
             if (mxList.length > 0) {
                 dnsMx.style.display = 'block';
                 dnsMx.innerHTML = '<strong style="opacity:0.8;">MX записи:</strong><br>' +
                     mxList.map(mx => `<span style="font-size:11px; font-family:monospace;">[${mx.priority}] ${mx.server}</span>`).join('<br>');
             }
-            
+
             // Get geolocation for first IPv4 IP
             let ipInfo = null;
             if (ipv4List.length > 0) {
                 ipInfo = await getIpInfo(ipv4List[0]);
             }
-            
+
             // Update geolocation
             if (ipInfo) {
                 dnsGeo.style.display = 'block';
@@ -765,17 +976,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (ipInfo.country) geoDetails.push(ipInfo.country);
                 const location = geoDetails.join(', ') || 'Неизвестно';
                 dnsGeo.innerHTML = `<strong style="opacity:0.8;">Геолокация:</strong> 📍 ${location}`;
-                
+
                 // Update hosting info
                 if (ipInfo.org) {
                     dnsHosting.style.display = 'block';
                     dnsHosting.innerHTML = `<strong style="opacity:0.8;">Провайдер:</strong> 🏢 ${ipInfo.org}`;
                 }
             }
-            
+
             // Analyze risks
             const riskAnalysis = analyzeRisk(ipInfo, domain);
-            
+
             // Update risk badge
             dnsRiskBadge.textContent = riskAnalysis.badge;
             const riskColors = {
@@ -784,20 +995,20 @@ document.addEventListener('DOMContentLoaded', async () => {
                 high: 'rgba(231, 76, 60, 0.3)'
             };
             dnsRiskBadge.style.background = riskColors[riskAnalysis.level] || riskColors.medium;
-            
+
             // Update risk details
             const detailsHtml = [
                 `<div style="margin-bottom:6px; opacity:0.9;">${riskAnalysis.summary}</div>`,
                 ...riskAnalysis.details.map(d => `<div style="margin:3px 0;">• ${d}</div>`)
             ].join('');
             dnsRiskDetails.innerHTML = detailsHtml;
-            
+
             // Update status
             dnsText.textContent = '✓ DNS проверка завершена';
             dnsDot.className = 'status-dot';
             dnsDot.classList.add('active');
             dnsContent.style.display = 'block';
-            
+
         } catch (e) {
             console.error('DNS check error:', e);
             dnsText.textContent = '❌ Ошибка DNS проверки';
@@ -824,11 +1035,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             showError('Не удалось перейти на безопасную страницу');
         }
     });
-    
+
     settingsLink.addEventListener('click', () => {
         chrome.runtime.openOptionsPage();
     });
-    
+
     // Функция проверки текущего URL
     async function checkCurrentUrl(forceRefresh = true) {
         if (!currentTab) {
@@ -847,14 +1058,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return;
             }
         }
-        
+
         if (!isAnalyzableUrl(currentTab.url)) {
             setStatus('Это внутренняя страница браузера - проверка не нужна', 'warning');
             return;
         }
-        
+
         setStatus('Проверяю страницу...', 'loading');
-        
+
         try {
             // Сначала пробуем через background script с принудительным обновлением
             let result;
@@ -864,7 +1075,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     url: currentTab.url,
                     forceRefresh: forceRefresh !== false  // По умолчанию принудительно при явной проверке
                 });
-                
+
                 if (result.error) {
                     throw new Error(result.error);
                 }
@@ -873,15 +1084,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // Fallback к прямому обращению к API
                 result = await directApiCall('/v1/check/url', { url: currentTab.url });
             }
-            
+
             updateStatus(result);
-            
+
         } catch (error) {
             console.error('Error checking URL:', error);
             setStatus('❌ Не удалось проверить страницу', 'error');
             // Проверяем, является ли ошибка проблемой подключения к локальному серверу
             const errorMsg = error.message || error.toString();
-            if (errorMsg.includes('BACKEND_NOT_RUNNING') || 
+            if (errorMsg.includes('BACKEND_NOT_RUNNING') ||
                 (errorMsg.includes('Failed to fetch') && errorMsg.includes('localhost')) ||
                 (errorMsg.includes('Failed to fetch') && errorMsg.includes('127.0.0.1'))) {
                 showError('⚠️ Backend сервер не запущен!\n\nЗапустите сервер в терминале:\ncd Agro_Phish/backend\npython3 -m uvicorn main:app --reload --host 0.0.0.0 --port 8000\n\nИли используйте скрипт: ./start_backend.sh');
@@ -892,7 +1103,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
     }
-    
+
     // Функция загрузки статистики
     async function loadStats() {
         try {
@@ -902,7 +1113,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 stats = await sendMessageToBackground({
                     type: 'GET_STATS'
                 });
-                
+
                 if (stats.error) {
                     throw new Error(stats.error);
                 }
@@ -911,10 +1122,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // Fallback к прямому обращению к API
                 stats = await directApiCall('/incidents/stats');
             }
-            
+
             totalBlocked.textContent = stats.blocked || 0;
             totalWarned.textContent = stats.warned || 0;
-            
+
         } catch (error) {
             // Не показываем всплывающую ошибку статистики, чтобы не мешать UX
             console.warn('Stats unavailable:', error?.message || error);
@@ -923,14 +1134,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             totalWarned.textContent = '-';
         }
     }
-    
+
     // Функция очистки кэша
     async function clearCache() {
         try {
             // Очищаем кэш в background script
             const cacheResult = await sendMessageToBackground({ type: 'CLEAR_CACHE' });
             const cacheCleared = (cacheResult && cacheResult.cleared) || 0;
-            
+
             // Очищаем базу данных incidents
             const candidates = ['http://localhost:8000', 'http://127.0.0.1:8000'];
             let base = candidates[0];
@@ -941,9 +1152,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                     await fetch(`${b}/health`, { signal: ctrl.signal });
                     clearTimeout(tid);
                     base = b; break;
-                } catch (_) {}
+                } catch (_) { }
             }
-            
+
             let dbCleared = 0;
             try {
                 const dbResp = await fetch(`${base}/incidents/clear`, {
@@ -957,10 +1168,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             } catch (dbError) {
                 console.warn('Failed to clear database:', dbError);
             }
-            
+
             const totalCleared = cacheCleared + dbCleared;
             setStatus(`✓ Очищено: ${totalCleared} записей`, 'safe');
-            
+
             // Обновляем статистику и проверяем текущий URL
             await Promise.all([
                 loadStats(),
@@ -972,11 +1183,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             setStatus('❌ Ошибка очистки', 'error');
         }
     }
-    
+
     // Функция для упрощения технических терминов в причинах
     function simplifyReason(reason) {
         if (!reason) return '';
-        
+
         const simpleMap = {
             'незащищенный протокол http': 'Соединение не защищено - это может быть опасно',
             'незащищенный протокол': 'Соединение не защищено',
@@ -991,14 +1202,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             'ошибка при анализе': 'Не удалось проверить сайт',
             'ошибка при проверке url': 'Не удалось проверить сайт'
         };
-        
+
         const lowerReason = reason.toLowerCase();
         for (const [tech, simple] of Object.entries(simpleMap)) {
             if (lowerReason.includes(tech)) {
                 return simple;
             }
         }
-        
+
         // Если не найдено в мапе, упрощаем вручную
         let simplified = reason
             .replace(/https?/gi, 'защищенное соединение')
@@ -1009,16 +1220,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             .replace(/url/gi, 'ссылка')
             .replace(/скрипт/gi, 'программа')
             .replace(/метаданные/gi, 'информация о странице');
-        
+
         return simplified || reason;
     }
-    
+
     // Функция обновления статуса
     function updateStatus(result) {
         const { action, score, reason } = result;
-        
+
         let statusClass, statusMessage, dotClass;
-        
+
         switch (action) {
             case 'block':
                 statusClass = 'blocked';
@@ -1040,26 +1251,26 @@ document.addEventListener('DOMContentLoaded', async () => {
                 statusMessage = '❓ НЕ УДАЛОСЬ ПРОВЕРИТЬ';
                 dotClass = 'inactive';
         }
-        
+
         // Показываем упрощенную причину под статусом
         const simplifiedReason = simplifyReason(reason);
         const displayText = simplifiedReason ? `${statusMessage}\n${simplifiedReason}` : statusMessage;
-        
+
         setStatus(displayText, statusClass);
-        
+
         // Обновляем статистику после проверки
         loadStats();
     }
-    
+
     // Функция установки статуса
     function setStatus(text, type = 'loading') {
         // Поддерживаем многострочный текст
         statusText.style.whiteSpace = 'pre-wrap';
         statusText.textContent = text;
-        
+
         // Удаляем все классы
         statusDot.className = 'status-dot';
-        
+
         // Добавляем соответствующий класс
         switch (type) {
             case 'active':
@@ -1079,7 +1290,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 statusDot.style.background = '#666666';
         }
     }
-    
+
     // Функция показа ошибки
     function showError(message) {
         errorDiv.textContent = message;
@@ -1088,7 +1299,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             errorDiv.style.display = 'none';
         }, 5000);
     }
-    
+
     // Функция отправки сообщения в background script
     function sendMessageToBackground(message) {
         return new Promise((resolve, reject) => {
@@ -1102,7 +1313,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         });
     }
-    
+
     // Fallback функция для прямого обращения к API
     async function directApiCall(endpoint, data = null) {
         try {
@@ -1116,7 +1327,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     clearTimeout(tid);
                     baseOk = base;
                     break;
-                } catch (_) {}
+                } catch (_) { }
             }
             const base = baseOk || candidates[0];
             const url = `${base}${endpoint}`;
@@ -1126,51 +1337,51 @@ document.addEventListener('DOMContentLoaded', async () => {
                     'Content-Type': 'application/json',
                 }
             };
-            
+
             if (data) {
                 options.body = JSON.stringify(data);
             }
-            
+
             console.log('Making direct API call to:', url);
             const response = await fetch(url, options);
-            
+
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
-            
+
             const result = await response.json();
             console.log('Direct API response:', result);
             return result;
-            
+
         } catch (error) {
             console.error('Direct API call error:', error);
-            
+
             // Если это ошибка сети, проверяем, это локальный сервер или внешний
             if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError') || error.message.includes('fetch failed')) {
                 throw new Error('BACKEND_NOT_RUNNING');
             }
-            
+
             throw error;
         }
     }
-    
+
     // Инициализация с обработкой ошибок
     async function initializePopup() {
         try {
             // Загружаем статистику
             await loadStats();
-            
+
             // Проверяем текущий URL если есть вкладка
             if (currentTab) {
                 await checkCurrentUrl(false);  // Автоматическая проверка - используем кэш
             } else {
                 setStatus('Нет открытой страницы', 'warning');
             }
-            
+
             // Скрываем загрузку и показываем основной контент
             loadingDiv.style.display = 'none';
             mainContent.style.display = 'block';
-            
+
         } catch (error) {
             console.error('Initialization error:', error);
             loadingDiv.style.display = 'none';
@@ -1184,10 +1395,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             setStatus('❌ Ошибка загрузки', 'error');
         }
     }
-    
+
     // Запускаем инициализацию
     initializePopup();
-    
+
     // Обновляем статистику каждые 30 секунд
     setInterval(loadStats, 30000);
 });

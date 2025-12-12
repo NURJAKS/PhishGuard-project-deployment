@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "PhishGuard",
   "short_name": "PhishGuard",
-  "version": "1.0.1",
+  "version": "1.1.2",
   "description": "Защита от фишинга и мошеннических сайтов",
   "permissions": [
     "activeTab",

@@ -41,6 +41,7 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 NIKTO_ROOT = BASE_DIR / "tools" / "nikto"
 NIKTO_PROGRAM = NIKTO_ROOT / "program" / "nikto.pl"
+GOBUSTER_BIN = BASE_DIR / "tools" / "gobuster" / "gobuster"
 
 app = FastAPI(
     title="PhishGuard API",
@@ -598,6 +599,15 @@ class VulnScanResponse(BaseModel):
     output: str
 
 
+class GobusterScanRequest(BaseModel):
+    url: str
+    wordlist: Optional[str] = None
+
+class JSDirbusterScanRequest(BaseModel):
+    url: str
+    wordlist: Optional[str] = None
+
+
 def _validate_scan_url(raw_url: str) -> str:
     parsed = urlparse(raw_url.strip())
     if not parsed.scheme or parsed.scheme not in ("http", "https"):
@@ -618,6 +628,173 @@ def _ensure_nikto_available() -> str:
     if not perl_bin:
         raise HTTPException(status_code=500, detail="Perl не установлен, Nikto требует perl.")
     return perl_bin
+
+
+def _ensure_gobuster_available(wordlist: Optional[str]) -> tuple[str, str]:
+    """
+    Ensure gobuster binary and wordlist exist.
+    Returns (binary_path, wordlist_path).
+    """
+    if not GOBUSTER_BIN.exists():
+        raise HTTPException(
+            status_code=500,
+            detail="Gobuster не найден. Установите бинарь в Agro_Phish/tools/gobuster/gobuster"
+        )
+    # Используем папку wordlists, если wordlist не указан или если указано только имя файла
+    if not wordlist:
+        wl_candidates = [
+            BASE_DIR / "extension" / "tools" / "wordlists" / "directory-list-2.3-small.txt",
+            BASE_DIR / "wordlists" / "common.txt",
+            BASE_DIR / "tools" / "gobuster" / "wordlist.txt"
+        ]
+        for wl_path in wl_candidates:
+            if wl_path.exists():
+                wl = str(wl_path)
+                break
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail="Wordlist не найден. Проверьте extension/tools/wordlists/"
+            )
+    else:
+        # Если передан абсолютный путь или путь относительно cwd
+        if Path(wordlist).exists():
+            wl = wordlist
+        else:
+            # Пробуем найти в папке wordlists расширения
+            wl_ext_path = BASE_DIR / "extension" / "tools" / "wordlists" / Path(wordlist).name
+            if wl_ext_path.exists():
+                wl = str(wl_ext_path)
+            else:
+                 # Пробуем старые пути
+                wl_old_path = BASE_DIR / "wordlists" / Path(wordlist).name
+                if wl_old_path.exists():
+                    wl = str(wl_old_path)
+                else:
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"Wordlist не найден: {wordlist}"
+                    )
+    return str(GOBUSTER_BIN), wl
+
+
+def _clean_gobuster_output(raw_output: str, wordlist_path: str, target_url: str) -> str:
+    """
+    Преобразует вывод Gobuster в структурированный и читабельный формат:
+    1. Удаляет ANSI escape codes
+    2. Удаляет декоративные линии (=====)
+    3. Удаляет строки прогресса
+    4. Извлекает полезную информацию
+    5. Форматирует в аккуратный вид
+    """
+    if not raw_output:
+        return "Gobuster Scan Summary\n---------------------\nTarget URL: {}\n\nResult:\nNo directories found.".format(target_url)
+    
+    lines = raw_output.split('\n')
+    
+    # Получаем имя файла wordlist
+    wordlist_filename = Path(wordlist_path).name
+    
+    # Извлекаем информацию из вывода
+    url = target_url
+    method = "GET"
+    threads = "10"
+    wordlist = wordlist_filename
+    negative_codes = "301,302,307,308,404"
+    exclude_length = "0"
+    
+    found_directories = []
+    parsing_info = False
+    parsing_results = False
+    
+    for line in lines:
+        # Удаляем ANSI escape codes
+        line = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]', '', line)
+        line = line.strip()
+        
+        # Пропускаем декоративные линии
+        if re.match(r'^=+$', line):
+            continue
+        
+        # Пропускаем пустые строки
+        if not line:
+            continue
+        
+        # Пропускаем заголовки версии
+        if 'Gobuster v' in line or 'by OJ Reeves' in line or 'by Christian Mehlmauer' in line:
+            continue
+        
+        # Пропускаем строки прогресса
+        if re.match(r'^Progress:\s*\d+\s*/\s*\d+', line, re.IGNORECASE):
+            continue
+        if re.match(r'^Progress:\s*', line, re.IGNORECASE):
+            continue
+        
+        # Извлекаем информацию из строк конфигурации
+        if '[+] Url:' in line:
+            url_match = re.search(r'https?://[^\s]+', line)
+            if url_match:
+                url = url_match.group(0)
+        elif '[+] Method:' in line:
+            method_match = re.search(r'GET|POST|PUT|DELETE', line)
+            if method_match:
+                method = method_match.group(0)
+        elif '[+] Threads:' in line:
+            threads_match = re.search(r'\d+', line)
+            if threads_match:
+                threads = threads_match.group(0)
+        elif '[+] Wordlist:' in line:
+            # Скрываем абсолютный путь
+            wordlist_match = re.search(r'([^/\s]+\.txt)', line)
+            if wordlist_match:
+                wordlist = wordlist_match.group(1)
+        elif '[+] Negative Status codes:' in line or 'Negative Status codes:' in line:
+            codes_match = re.search(r'(\d+(?:,\d+)*)', line)
+            if codes_match:
+                negative_codes = codes_match.group(1)
+        elif '[+] Exclude Length:' in line or 'Exclude Length:' in line:
+            length_match = re.search(r'(\d+)', line)
+            if length_match:
+                exclude_length = length_match.group(1)
+        
+        # Пропускаем служебные строки
+        if 'Starting gobuster' in line or 'Finished' in line:
+            continue
+        
+        # Извлекаем найденные директории
+        # Форматы: /path/to/dir (Status: 200) [Size: 1234]
+        # или просто /path/to/dir
+        if re.match(r'^/', line):
+            # Это найденная директория
+            found_directories.append(line)
+        elif re.search(r'\(Status:\s*\d+\)', line):
+            # Строка с результатом (может быть без начального /)
+            found_directories.append(line)
+    
+    # Формируем структурированный вывод
+    result_lines = [
+        "Gobuster Scan Summary",
+        "---------------------",
+        f"Target URL: {url}",
+        f"Wordlist: {wordlist}",
+        f"Threads: {threads}",
+        f"Ignored Status Codes: {negative_codes}",
+        f"Ignored Length: {exclude_length}",
+        "",
+        "Result:"
+    ]
+    
+    if found_directories:
+        result_lines.append("")
+        for dir_line in found_directories:
+            # Очищаем строку от лишнего
+            cleaned_dir = re.sub(r'\s+', ' ', dir_line).strip()
+            if cleaned_dir:
+                result_lines.append(cleaned_dir)
+    else:
+        result_lines.append("No directories found.")
+    
+    return '\n'.join(result_lines)
 
 
 @app.post("/v1/vuln/nikto", response_model=VulnScanResponse)
@@ -653,6 +830,133 @@ async def nikto_vuln_scan(req: VulnScanRequest):
     if len(output) > 12000:
         output = output[:12000] + "\n...output truncated..."
 
+    status = "ok" if completed.returncode == 0 else f"error:{completed.returncode}"
+    return VulnScanResponse(status=status, target=target, output=output)
+
+
+@app.post("/v1/vuln/gobuster", response_model=VulnScanResponse)
+async def gobuster_dir_scan(req: GobusterScanRequest):
+    """Запускает Gobuster dir scan против указанного URL."""
+    target = _validate_scan_url(req.url)
+    bin_path, wordlist = _ensure_gobuster_available(req.wordlist)
+
+    # Используем только status-codes-blacklist для исключения нежелательных кодов
+    # Blacklist по умолчанию содержит 404, добавляем redirect коды (301, 302, 307)
+    # Исключаем пустые ответы через exclude-length
+    # НЕ используем одновременно --status-codes и --status-codes-blacklist
+    cmd = [
+        bin_path,
+        "dir",
+        "--url", target,
+        "--wordlist", wordlist,
+        "--timeout", "10s",
+        "--delay", "0s",
+        "--no-color",
+        "--threads", "10",
+        "--status-codes-blacklist", "301,302,307,308,404",
+        "--exclude-length", "0"
+    ]
+
+    try:
+        completed = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            cwd=str(Path(bin_path).parent),
+            timeout=120
+        )
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail="Gobuster scan timed out after 120s")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gobuster execution error: {str(e)}")
+
+    # Получаем сырой вывод
+    raw_output = (completed.stdout or "") + ("\n" + completed.stderr if completed.stderr else "")
+    
+    # Очищаем и форматируем вывод
+    cleaned_output = _clean_gobuster_output(raw_output, wordlist, target)
+    
+    # Обрезаем слишком длинный вывод
+    if len(cleaned_output) > 12000:
+        cleaned_output = cleaned_output[:12000] + "\n...output truncated..."
+    
+    if not cleaned_output.strip():
+        cleaned_output = "Gobuster Scan Summary\n---------------------\nTarget URL: {}\n\nResult:\nNo directories found.".format(target)
+    
+    # Gobuster может возвращать 1, если ничего не найдено, но вывод все равно полезен
+    # Считаем успешным, если есть вывод (не пустой) или код возврата 0
+    if completed.returncode == 0 or (completed.returncode == 1 and cleaned_output.strip()):
+        status = "ok"
+    else:
+        status = f"error:{completed.returncode}"
+    
+    return VulnScanResponse(status=status, target=target, output=cleaned_output)
+
+
+JS_DIRBUSTER_ROOT = BASE_DIR / "tools" / "jsdirbuster"
+
+def _ensure_jsdirbuster_available(wordlist: Optional[str]) -> tuple[str, str]:
+    """Ensure JSDirbuster files exist."""
+    if not JS_DIRBUSTER_ROOT.exists():
+        raise HTTPException(
+            status_code=500,
+            detail="JSDirbuster не найден. Установите в Agro_Phish/tools/jsdirbuster"
+        )
+    js_file = JS_DIRBUSTER_ROOT / "jsdirbuster.js"
+    if not js_file.exists():
+        # Попробуем найти любой .js файл в директории
+        js_files = list(JS_DIRBUSTER_ROOT.glob("*.js"))
+        if not js_files:
+            raise HTTPException(
+                status_code=500,
+                detail="JSDirbuster.js не найден"
+            )
+        js_file = js_files[0]
+    wl = wordlist or str(BASE_DIR / "tools" / "gobuster" / "wordlist.txt")
+    if not Path(wl).exists():
+        raise HTTPException(
+            status_code=500,
+            detail=f"Wordlist не найден: {wl}"
+        )
+    return str(js_file), wl
+
+
+@app.post("/v1/vuln/jsdirbuster", response_model=VulnScanResponse)
+async def jsdirbuster_scan(req: JSDirbusterScanRequest):
+    """Запускает JSDirbuster scan против указанного URL."""
+    target = _validate_scan_url(req.url)
+    js_file, wordlist = _ensure_jsdirbuster_available(req.wordlist)
+    
+    node_bin = shutil.which("node")
+    if not node_bin:
+        raise HTTPException(status_code=500, detail="Node.js не установлен, JSDirbuster требует node.")
+    
+    cmd = [
+        node_bin,
+        js_file,
+        "-u", target,
+        "-w", wordlist,
+        "-t", "10"
+    ]
+    
+    try:
+        completed = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            cwd=str(JS_DIRBUSTER_ROOT),
+            timeout=120
+        )
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail="JSDirbuster scan timed out after 120s")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"JSDirbuster execution error: {str(e)}")
+    
+    output = (completed.stdout or "") + ("\n" + completed.stderr if completed.stderr else "")
+    output = output.strip() or "JSDirbuster завершил работу без вывода."
+    if len(output) > 12000:
+        output = output[:12000] + "\n...output truncated..."
+    
     status = "ok" if completed.returncode == 0 else f"error:{completed.returncode}"
     return VulnScanResponse(status=status, target=target, output=output)
 
