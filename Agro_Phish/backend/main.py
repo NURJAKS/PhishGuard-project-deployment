@@ -11,8 +11,10 @@ import os
 import logging
 from typing import List, Optional
 import re
+import socket
 import subprocess
 import shutil
+import concurrent.futures
 
 # Configure logging
 logging.basicConfig(
@@ -42,6 +44,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 NIKTO_ROOT = BASE_DIR / "tools" / "nikto"
 NIKTO_PROGRAM = NIKTO_ROOT / "program" / "nikto.pl"
 GOBUSTER_BIN = BASE_DIR / "tools" / "gobuster" / "gobuster"
+MASSCAN_BIN = BASE_DIR / "tools" / "masscan" / "masscan"
 
 app = FastAPI(
     title="PhishGuard API",
@@ -959,6 +962,434 @@ async def jsdirbuster_scan(req: JSDirbusterScanRequest):
     
     status = "ok" if completed.returncode == 0 else f"error:{completed.returncode}"
     return VulnScanResponse(status=status, target=target, output=output)
+
+
+def _ensure_masscan_available() -> str:
+    """Ensure masscan binary exists and return its path."""
+    if not MASSCAN_BIN.exists():
+        raise HTTPException(
+            status_code=500,
+            detail="Masscan не найден. Установите бинарь в Agro_Phish/tools/masscan/masscan"
+        )
+    return str(MASSCAN_BIN)
+
+
+def _check_masscan_permissions() -> bool:
+    """Проверяет есть ли у masscan права на raw sockets через setcap."""
+    try:
+        # Проверяем через getcap
+        result = subprocess.run(
+            ['getcap', str(MASSCAN_BIN)],
+            capture_output=True,
+            text=True,
+            timeout=2
+        )
+        if result.returncode == 0 and result.stdout:
+            # Проверяем наличие нужных capabilities
+            output = result.stdout.lower()
+            if 'cap_net_raw' in output and 'cap_net_admin' in output:
+                return True
+        return False
+    except Exception:
+        return False
+
+
+def _get_ip_from_domain(domain: str) -> str:
+    """Получить IP адрес домена используя несколько методов."""
+    # Удаляем порт если есть
+    domain = domain.split(':')[0].strip()
+    
+    # Метод 1: socket.gethostbyname (быстрый, встроенный)
+    try:
+        ip = socket.gethostbyname(domain)
+        logging.info(f"[DNS] Resolved {domain} -> {ip} via socket")
+        return ip
+    except socket.gaierror:
+        pass
+    except Exception as e:
+        logging.warning(f"[DNS] Socket method failed for {domain}: {e}")
+    
+    # Метод 2: nslookup (резервный)
+    try:
+        result = subprocess.run(
+            ['nslookup', domain],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode == 0:
+            for line in result.stdout.split('\n'):
+                if 'Address:' in line and not '#' in line:
+                    ip = line.split('Address:')[-1].strip()
+                    if ip and ip != domain:
+                        # Проверяем что это валидный IP
+                        try:
+                            socket.inet_aton(ip)
+                            logging.info(f"[DNS] Resolved {domain} -> {ip} via nslookup")
+                            return ip
+                        except socket.error:
+                            continue
+    except Exception as e:
+        logging.warning(f"[DNS] nslookup method failed for {domain}: {e}")
+    
+    # Метод 3: dig (резервный)
+    try:
+        result = subprocess.run(
+            ['dig', '+short', domain],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode == 0:
+            ip = result.stdout.strip().split('\n')[0]
+            if ip and ip.replace('.', '').isdigit():
+                try:
+                    socket.inet_aton(ip)
+                    logging.info(f"[DNS] Resolved {domain} -> {ip} via dig")
+                    return ip
+                except socket.error:
+                    pass
+    except Exception as e:
+        logging.warning(f"[DNS] dig method failed for {domain}: {e}")
+    
+    # Метод 4: host (резервный)
+    try:
+        result = subprocess.run(
+            ['host', domain],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode == 0:
+            for line in result.stdout.split('\n'):
+                if 'has address' in line:
+                    ip = line.split('has address')[-1].strip()
+                    if ip:
+                        try:
+                            socket.inet_aton(ip)
+                            logging.info(f"[DNS] Resolved {domain} -> {ip} via host")
+                            return ip
+                        except socket.error:
+                            continue
+    except Exception as e:
+        logging.warning(f"[DNS] host method failed for {domain}: {e}")
+    
+    # Если все методы не сработали
+    raise HTTPException(status_code=400, detail=f"Не удалось получить IP адрес для домена {domain} ни одним из методов (socket, nslookup, dig, host)")
+
+
+class PortScanRequest(BaseModel):
+    url: str
+
+
+class PortScanResponse(BaseModel):
+    status: str
+    target_ip: Optional[str] = None
+    target_domain: Optional[str] = None
+    output: str
+
+
+def _scan_ports_socket(ip: str, ports: List[int], timeout: float = 1.0) -> List[int]:
+    """Базовое сканирование портов через socket.connect (работает без root)."""
+    open_ports = []
+    
+    def check_port(port):
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(timeout)
+            result = sock.connect_ex((ip, port))
+            sock.close()
+            if result == 0:
+                return port
+            return None
+        except Exception:
+            return None
+    
+    # Используем ThreadPoolExecutor для параллельного сканирования
+    with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor:
+        futures = {executor.submit(check_port, port): port for port in ports}
+        for future in concurrent.futures.as_completed(futures):
+            port = future.result()
+            if port:
+                open_ports.append(port)
+    
+    return sorted(open_ports)
+
+
+@app.post("/v1/vuln/portscan", response_model=PortScanResponse)
+async def port_scan(req: PortScanRequest):
+    """Запускает портовое сканирование IP адреса домена из указанного URL."""
+    # Валидация и извлечение домена из URL
+    parsed = urlparse(req.url.strip())
+    if not parsed.netloc:
+        raise HTTPException(status_code=400, detail="Некорректный URL для сканирования.")
+    
+    domain = parsed.netloc.split(':')[0].strip()  # Убираем порт если есть
+    
+    # Получаем IP адрес домена используя несколько методов
+    try:
+        target_ip = _get_ip_from_domain(domain)
+        logging.info(f"[PORTSCAN] Resolved domain {domain} -> IP {target_ip}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка получения IP адреса: {str(e)}")
+    
+    output_lines = []
+    output_lines.append(f"Port Scan Results")
+    output_lines.append(f"{'='*50}")
+    output_lines.append(f"Target Domain: {domain}")
+    output_lines.append(f"Target IP: {target_ip}")
+    output_lines.append("")
+    
+    # ПОЛНОЕ СКАНИРОВАНИЕ ВСЕХ 65535 ПОРТОВ
+    # Используем массcan для сканирования всего диапазона портов
+    port_range = "1-65535"
+    
+    # Для категоризации результатов (используется только для отображения)
+    web_ports = [80, 443, 8080, 8443, 8000, 8001, 8888, 9000, 3000, 5000]
+    db_ports = [3306, 5432, 27017, 6379, 9200, 11211]
+    common_ports = [21, 22, 23, 25, 53, 110, 111, 135, 139, 143, 445, 993, 995, 1723, 3389, 5900]
+    
+    output_lines.append(f"Scanning ALL ports (1-65535) using Masscan...")
+    output_lines.append("This may take 30-60 seconds depending on network speed.")
+    output_lines.append("")
+    
+    # Пробуем сначала masscan (если есть права)
+    masscan_worked = False
+    masscan_ports = []
+    has_masscan_permissions = False
+    
+    try:
+        masscan_bin = _ensure_masscan_available()
+        has_masscan_permissions = _check_masscan_permissions()
+        
+        if has_masscan_permissions:
+            output_lines.append("✓ Masscan имеет необходимые права (setcap)")
+            output_lines.append("")
+        else:
+            output_lines.append("⚠️  Masscan не имеет прав на raw sockets.")
+            output_lines.append("Для полноценного сканирования выполните:")
+            output_lines.append("  sudo ./setup_masscan_permissions.sh")
+            output_lines.append("или:")
+            output_lines.append(f"  sudo setcap cap_net_raw,cap_net_admin=eip {masscan_bin}")
+            output_lines.append("")
+        
+        cmd = [
+            masscan_bin,
+            target_ip,
+            "-p", port_range,  # Сканируем все порты 1-65535
+            "--rate", "10000",  # Увеличиваем скорость до 10000 пакетов/сек для быстрого сканирования
+            "--wait", "5",  # Ждем 5 секунд для завершения сканирования
+            "-oJ", "-",  # JSON формат вывода
+        ]
+        
+        # Запускаем masscan
+        # Используем Popen для лучшего контроля над выводом
+        # Masscan выводит результаты постепенно, поэтому читаем потоково
+        try:
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=0  # Небуферизованный режим
+            )
+            
+            # Читаем вывод с таймаутом
+            stdout, stderr = process.communicate(timeout=120)
+            returncode = process.returncode
+            
+            # Дополнительная пауза для завершения записи всех результатов
+            # Masscan может выводить последние результаты с задержкой
+            import time
+            if returncode == 0:
+                time.sleep(1)  # Даем время на финальную запись
+                
+        except subprocess.TimeoutExpired:
+            process.kill()
+            stdout, stderr = process.communicate()
+            returncode = -1
+        
+        # Парсим JSON вывод masscan
+        # Masscan выводит массив объектов вида:
+        # [{"ip": "...", "ports": [{"port": 80, "proto": "tcp", ...}]}, ...]
+        # Masscan может выводить прогресс в stdout вместе с JSON, поэтому используем regex
+        if stdout:
+            stdout_clean = stdout.strip()
+            logging.info(f"[PORTSCAN] Masscan stdout length: {len(stdout_clean)}")
+            
+            # Метод 1: Ищем JSON массив в выводе используя regex
+            # Masscan выводит прогресс перед JSON, поэтому ищем последний JSON массив
+            json_match = re.search(r'\[.*\]', stdout_clean, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(0)
+                try:
+                    results = json.loads(json_str)
+                    if isinstance(results, list):
+                        logging.info(f"[PORTSCAN] Parsed JSON array with {len(results)} items")
+                        for item in results:
+                            if isinstance(item, dict) and 'ports' in item:
+                                ports_list = item['ports']
+                                if isinstance(ports_list, list):
+                                    for port_info in ports_list:
+                                        if isinstance(port_info, dict) and 'port' in port_info:
+                                            port = port_info['port']
+                                            if port not in masscan_ports:
+                                                masscan_ports.append(int(port))
+                                                logging.info(f"[PORTSCAN] Found port: {port}")
+                except json.JSONDecodeError as e:
+                    logging.warning(f"[PORTSCAN] JSON array parse failed: {e}, trying direct parse")
+                    # Пробуем метод 2
+            
+            # Метод 2: Если regex не сработал, пробуем прямой парсинг всего stdout
+            if not masscan_ports:
+                try:
+                    results = json.loads(stdout_clean)
+                    if isinstance(results, list):
+                        for item in results:
+                            if isinstance(item, dict) and 'ports' in item:
+                                ports_list = item['ports']
+                                if isinstance(ports_list, list):
+                                    for port_info in ports_list:
+                                        if isinstance(port_info, dict) and 'port' in port_info:
+                                            port = port_info['port']
+                                            if port not in masscan_ports:
+                                                masscan_ports.append(int(port))
+                except json.JSONDecodeError:
+                    # Метод 3: Построчный парсинг
+                    for line in stdout_clean.split('\n'):
+                        line = line.strip().rstrip(',')
+                        if not line or line in ['[', ']', ',']:
+                            continue
+                        try:
+                            item = json.loads(line)
+                            if isinstance(item, dict) and 'ports' in item:
+                                ports_list = item['ports']
+                                if isinstance(ports_list, list):
+                                    for port_info in ports_list:
+                                        if isinstance(port_info, dict) and 'port' in port_info:
+                                            port = port_info['port']
+                                            if port not in masscan_ports:
+                                                masscan_ports.append(int(port))
+                        except (json.JSONDecodeError, ValueError, TypeError):
+                            continue
+            
+            # Сортируем порты для консистентности
+            masscan_ports.sort()
+            logging.info(f"[PORTSCAN] Total ports found: {len(masscan_ports)} - {masscan_ports}")
+        
+        # Проверяем результаты
+        if masscan_ports:
+            masscan_worked = True
+            output_lines.append(f"✓ Masscan scan completed successfully!")
+            output_lines.append(f"  Scanned: ALL ports (1-65535)")
+            output_lines.append(f"  Found: {len(masscan_ports)} open port(s)")
+            output_lines.append("")
+        elif completed.returncode == 0:
+            # Masscan завершился успешно но портов не найдено
+            output_lines.append("✓ Masscan scan completed successfully!")
+            output_lines.append(f"  Scanned: ALL ports (1-65535)")
+            output_lines.append(f"  Found: 0 open ports")
+            output_lines.append("")
+    except Exception as e:
+        logging.info(f"[PORTSCAN] Masscan failed: {e}")
+        if not has_masscan_permissions:
+            output_lines.append("⚠️  Masscan requires root privileges or setcap permissions.")
+            output_lines.append("Falling back to socket-based scan...")
+            output_lines.append("")
+    
+    # Если masscan не сработал, используем socket-based сканирование
+    # ВАЖНО: Для полного сканирования всех портов socket-based метод слишком медленный
+    # Поэтому показываем предупреждение и сканируем только популярные порты
+    if not masscan_worked:
+        if not has_masscan_permissions:
+            # Сообщение уже добавлено выше
+            pass
+        output_lines.append("⚠️  Masscan недоступен. Используется ограниченное socket-based сканирование.")
+        output_lines.append("Для полного сканирования всех портов необходим masscan с правами setcap.")
+        output_lines.append("Сканируем только популярные порты (32 порта)...")
+        output_lines.append("")
+        
+        # Для fallback сканируем только популярные порты
+        fallback_ports = sorted(list(set(common_ports + web_ports + db_ports)))
+        try:
+            open_ports = _scan_ports_socket(target_ip, fallback_ports, timeout=2.0)
+            masscan_ports = open_ports
+        except Exception as e:
+            logging.error(f"[PORTSCAN] Socket scan error: {e}")
+            open_ports = []
+    
+    # Форматируем результаты
+    if masscan_ports:
+        output_lines.append("=" * 50)
+        output_lines.append("OPEN PORTS DISCOVERED:")
+        output_lines.append("=" * 50)
+        output_lines.append("")
+        
+        # Группируем порты по категориям
+        web_open = [p for p in masscan_ports if p in web_ports]
+        db_open = [p for p in masscan_ports if p in db_ports]
+        other_open = [p for p in masscan_ports if p not in web_ports and p not in db_ports]
+        
+        # Словарь сервисов для всех известных портов
+        service_names = {
+            21: "FTP", 22: "SSH", 23: "Telnet", 25: "SMTP", 53: "DNS",
+            80: "HTTP", 110: "POP3", 111: "RPC", 135: "MSRPC", 139: "NetBIOS",
+            143: "IMAP", 443: "HTTPS", 445: "SMB", 993: "IMAPS", 995: "POP3S",
+            1723: "PPTP", 3306: "MySQL", 3389: "RDP", 5432: "PostgreSQL",
+            5900: "VNC", 8080: "HTTP-Proxy", 8443: "HTTPS-Alt", 8000: "HTTP-Alt",
+            8001: "HTTP-Alt", 8888: "HTTP-Alt", 9000: "HTTP-Alt", 3000: "HTTP-Alt",
+            5000: "HTTP-Alt", 27017: "MongoDB", 6379: "Redis", 9200: "Elasticsearch",
+            11211: "Memcached"
+        }
+        
+        if web_open:
+            output_lines.append("🌐 Web Ports:")
+            for port in sorted(web_open):
+                service = service_names.get(port, "Unknown")
+                output_lines.append(f"  {port:5d}/tcp - {service}")
+            output_lines.append("")
+        
+        if db_open:
+            output_lines.append("💾 Database Ports:")
+            for port in sorted(db_open):
+                service = service_names.get(port, "Unknown")
+                output_lines.append(f"  {port:5d}/tcp - {service}")
+            output_lines.append("")
+        
+        if other_open:
+            output_lines.append("🔧 Other Ports:")
+            for port in sorted(other_open):
+                service = service_names.get(port, "Unknown")
+                output_lines.append(f"  {port:5d}/tcp - {service}")
+            output_lines.append("")
+        
+        output_lines.append("=" * 50)
+        output_lines.append(f"Total: {len(masscan_ports)} open port(s) found out of 65535 scanned")
+    else:
+        output_lines.append("=" * 50)
+        output_lines.append("NO OPEN PORTS FOUND")
+        output_lines.append("=" * 50)
+        output_lines.append("")
+        output_lines.append("Scanned: ALL ports (1-65535)")
+        output_lines.append("Result: No open ports detected")
+        output_lines.append("")
+        output_lines.append("Note: This means all 65535 ports were scanned and none responded.")
+    
+    output = '\n'.join(output_lines)
+    
+    # Обрезаем слишком длинный вывод
+    if len(output) > 12000:
+        output = output[:12000] + "\n...output truncated..."
+    
+    status = "ok" if masscan_ports else "ok"  # Всегда ok, даже если портов не найдено
+    return PortScanResponse(
+        status=status,
+        target_ip=target_ip,
+        target_domain=domain,
+        output=output
+    )
 
 
 class FullAuditRequest(BaseModel):

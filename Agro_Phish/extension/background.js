@@ -405,6 +405,55 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // ВАЖНО: возвращаем true для асинхронного ответа
   }
 
+  if (message.type === 'RUN_PORT_SCAN') {
+    (async () => {
+      try {
+        console.log('Running Port Scan for URL:', message.url);
+        
+        // Нормализация URL для получения домена
+        const targetUrl = normalizeTargetUrl(message.url);
+        console.log('Normalized Target URL:', targetUrl);
+        
+        const apiBase = await resolveApiBase();
+        console.log('Using API base:', apiBase);
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 минуты таймаут
+
+        const resp = await fetch(`${apiBase}/v1/vuln/portscan`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: targetUrl }),
+          signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!resp.ok) {
+          let errorText = '';
+          try {
+            errorText = await resp.text();
+          } catch (_) {
+            errorText = `HTTP ${resp.status}`;
+          }
+          safeSendResponse({ error: `HTTP ${resp.status}: ${errorText}` });
+          return;
+        }
+
+        const data = await resp.json();
+        console.log('Port Scan result:', data);
+        safeSendResponse({ success: true, data });
+      } catch (error) {
+        console.error('Port Scan error:', error);
+        safeSendResponse({
+          error: error.message || error.toString() || 'Unknown error',
+          details: error.name
+        });
+      }
+    })();
+    return true; // ВАЖНО: возвращаем true для асинхронного ответа
+  }
+
   if (message.type === 'RUN_JSDIRBUSTER') {
     (async () => {
       try {

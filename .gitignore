@@ -24,10 +24,31 @@ env/
 *.pyo
 *.pyd
 .ipynb_checkpoints/
+*.pyc
+*.pyo
+*.pyd
+.Python
+build/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
 # Database
 **/database/*.db
 **/database/*.sqlite*
+*.db-journal
+*.db-wal
+*.db-shm
 
 # Node.js / npm / JS / Chrome extension
 node_modules/
@@ -38,6 +59,7 @@ pnpm-debug.log*
 lerna-debug.log*
 package-lock.json
 yarn.lock
+pnpm-lock.yaml
 .pnp/
 .pnp.js
 frontend/dist/
@@ -45,20 +67,25 @@ extension/dist/
 extension/*.zip
 extension/*.crx
 extension/*.pem
+*.tsbuildinfo
 
 # Logs
 *.log
 logs/
 backend/*.log
+dashboard/*.log
 dashb*/*.log
+*.log.*
 
 # Docker
 .dockerignore
 docker-compose.yml
+docker-compose.override.yml
 *.pid
 *.sock
 *.tmp
 *.bak
+.docker/
 
 # AWS / Lambda / Amplify
 .aws-sam/
@@ -82,6 +109,9 @@ Thumbs.db
 .ntvs*
 .njsproj
 .sln
+*.sublime-project
+*.sublime-workspace
+*.code-workspace
 
 # OS / System junk
 .DS_Store?
@@ -90,35 +120,110 @@ Thumbs.db
 .Trashes
 ehthumbs.db
 Desktop.ini
+$RECYCLE.BIN/
+.directory
 
 # Temporary
 /tmp/
 tmp/
 temp/
 *.tmp
+*.temp
+*.cache
+.cache/
 
 # Config (potentially sensitive or local)
 auto_scan_config.json
 **/config/local.*
 **/config/production.*
+*.local
+*.local.*
+secrets.json
+credentials.json
 
 # Archives
 *.zip
 *.tar.gz
 *.rar
+*.7z
+*.gz
+*.bz2
 
 # Model files and checkpoints
 *.pt
 *.h5
 *.pth
 *.pkl
+*.ckpt
+*.safetensors
 
 # Miscellaneous
 coverage/
 *.coverage
 htmlcov/
 .envrc
+.tox/
+.pytest_cache/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.hypothesis/
+*.cover
+.hypothesis/
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+*.mo
+*.pot
 
-# Remove duplicated and unneeded rules from subfolders
+# Uploads and user data
+uploads/
+**/uploads/*
+**/static/uploads/*
+test_invoice.pdf
+example_invoice.*
+
+# Tools binaries (keep source, ignore compiled)
+tools/**/*.o
+tools/**/*.a
+tools/**/bin/
+tools/**/build/
+tools/**/tmp/
+tools/masscan/tmp/
+tools/gobuster/tmp/
+
+# Pinkerton
+Pinkerton/__pycache__/
+Pinkerton/*.pyc
+
+# PhishGuardAI (AWS Lambda)
+PhishGuardAI/.aws-sam/
+PhishGuardAI/node_modules/
+PhishGuardAI/dist/
+
+# PhishGuardCSharp
+PhishGuardCSharp/bin/
+PhishGuardCSharp/obj/
+PhishGuardCSharp/.vs/
+PhishGuardCSharp/*.user
+PhishGuardCSharp/*.suo
+
+# Masscan source (if cloned)
+masscan/bin/
+masscan/tmp/
+masscan/*.o
+masscan/*.a
+
+# Test files
+test_*.py
+*_test.py
+tests/__pycache__/
+
+# Documentation builds
+docs/_build/
+docs/.doctrees/
+
 # -------- END UNIFIED .gitignore -------- #
 

@@ -43,6 +43,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const vulnText = document.getElementById('vuln-text');
     const vulnDetails = document.getElementById('vuln-details');
     const gobusterBtn = document.getElementById('gobuster-scan');
+    const portScanBtn = document.getElementById('port-scan');
+    const portScanStatus = document.getElementById('portScanStatus');
+    const portDot = document.getElementById('port-dot');
+    const portText = document.getElementById('port-text');
+    const portTarget = document.getElementById('port-target');
+    const portDetails = document.getElementById('port-details');
     const jsdirbusterBtn = document.getElementById('jsdirbuster-scan');
     const checkDnsBtn = document.getElementById('check-dns');
     const dnsCheckStatus = document.getElementById('dnsCheckStatus');
@@ -250,6 +256,87 @@ document.addEventListener('DOMContentLoaded', async () => {
                 vulnDot.className = 'status-dot inactive';
                 const errorMsg = error.message || error.toString() || 'Неизвестная ошибка';
                 vulnDetails.textContent = errorMsg;
+            });
+        });
+    }
+
+    // Port Scan button handler - через background.js
+    if (portScanBtn) {
+        portScanBtn.addEventListener('click', () => {
+            if (!currentTab || !isAnalyzableUrl(currentTab.url)) {
+                showError('Не удалось получить URL для сканирования');
+                return;
+            }
+            portScanStatus.style.display = 'block';
+            portText.textContent = 'Получение IP адреса...';
+            portDot.className = 'status-dot';
+            portDot.style.background = '#666666';
+            portTarget.textContent = '';
+            portDetails.textContent = 'Получение IP адреса домена...';
+
+            // Используем промис для обработки ответа
+            new Promise((resolve, reject) => {
+                try {
+                    chrome.runtime.sendMessage({
+                        type: 'RUN_PORT_SCAN',
+                        url: currentTab.url
+                    }, (response) => {
+                        // Проверяем ошибки Chrome runtime
+                        if (chrome.runtime.lastError) {
+                            reject(new Error(chrome.runtime.lastError.message || 'Ошибка связи с background script'));
+                            return;
+                        }
+                        // Проверяем что ответ получен
+                        if (response === undefined || response === null) {
+                            reject(new Error('Не получен ответ от background script. Возможно, порт закрылся.'));
+                            return;
+                        }
+                        resolve(response);
+                    });
+                } catch (e) {
+                    reject(e);
+                }
+            }).then((response) => {
+                // Обработка успешного ответа
+                if (response && response.error) {
+                    portText.textContent = '❌ Port Scan не удалось запустить';
+                    portDot.className = 'status-dot inactive';
+                    portDetails.textContent = response.error || 'Неизвестная ошибка';
+                    return;
+                }
+
+                if (response && response.success && response.data) {
+                    const data = response.data;
+                    portText.textContent = data.status === 'ok' ? '✓ Port Scan завершен' : `Port Scan статус: ${data.status}`;
+                    portDot.className = 'status-dot';
+                    portDot.style.background = data.status === 'ok' ? '#4CAF50' : '#ffaa00';
+                    
+                    if (data.target_ip) {
+                        portTarget.textContent = `IP адрес: ${data.target_ip}`;
+                    }
+                    
+                    // Форматируем вывод для красивого отображения
+                    if (data.output) {
+                        // Используем innerHTML для сохранения форматирования
+                        portDetails.style.whiteSpace = 'pre-wrap';
+                        portDetails.style.fontFamily = 'monospace';
+                        portDetails.style.fontSize = '11px';
+                        portDetails.textContent = data.output;
+                    } else {
+                        portDetails.textContent = 'Нет результатов сканирования';
+                    }
+                } else {
+                    portText.textContent = '❌ Неверный формат ответа';
+                    portDot.className = 'status-dot inactive';
+                    portDetails.textContent = 'Ответ от сервера не содержит ожидаемых данных';
+                }
+            }).catch((error) => {
+                // Обработка ошибок
+                console.error('Port Scan error:', error);
+                portText.textContent = '❌ Port Scan не удалось запустить';
+                portDot.className = 'status-dot inactive';
+                const errorMsg = error.message || error.toString() || 'Неизвестная ошибка';
+                portDetails.textContent = errorMsg;
             });
         });
     }

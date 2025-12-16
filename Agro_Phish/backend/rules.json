@@ -2,7 +2,9 @@
   "blacklist_domains": [
     "cyber-police-detailed-test.com",
     "baikonurmed.kz",
-    "z.kyz2dar-cia.net"
+    "z.kyz2dar-cia.net",
+    "195.12.113.2",
+    "kyz7dar-xbf.net"
   ],
   "whitelist_domains": [
     "bankffin-kz.netlify.app",
