@@ -148,6 +148,7 @@ credentials.json
 *.7z
 *.gz
 *.bz2
+*.deb
 
 # Model files and checkpoints
 *.pt

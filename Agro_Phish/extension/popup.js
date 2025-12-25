@@ -805,8 +805,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             aiText.textContent = '❌ Не удалось проверить сайт';
             aiDot.className = 'status-dot inactive';
             const errorMsg = e.message || e.toString();
-            if (errorMsg.includes('Failed to fetch') || errorMsg.includes('NetworkError')) {
+            if (errorMsg.includes('Failed to fetch') || errorMsg.includes('NetworkError') || errorMsg.includes('fetch failed')) {
                 aiDetails.textContent = '⚠️ Backend сервер не запущен! Запустите сервер на http://localhost:8000';
+            } else if (errorMsg.includes('HTTP error! status: 500')) {
+                aiDetails.textContent = '⚠️ Ошибка на сервере (500). Проверьте логи backend сервера или попробуйте позже.';
+            } else if (errorMsg.includes('HTTP error! status: 400')) {
+                aiDetails.textContent = '⚠️ Некорректный запрос (400). Проверьте, что URL валиден.';
             } else {
                 aiDetails.textContent = `Ошибка: ${errorMsg}. Попробуйте позже или проверьте подключение к интернету.`;
             }
@@ -825,18 +829,32 @@ document.addEventListener('DOMContentLoaded', async () => {
         vulnDetails.textContent = '';
         try {
             const resp = await directApiCall('/v1/vuln/nikto', { url: currentTab.url });
-            vulnText.textContent = '✓ Nikto scan завершен';
-            vulnDot.className = 'status-dot';
-            vulnDot.classList.add('active');
-            const statusLine = resp?.status ? `Статус: ${resp.status}\n` : '';
-            const output = resp?.output || 'Нет данных от Nikto.';
-            vulnDetails.textContent = statusLine + output;
+            
+            // Проверяем статус ответа
+            if (resp?.status && resp.status.startsWith('error:')) {
+                // Если Nikto не установлен или другая ошибка, показываем информационное сообщение
+                vulnText.textContent = resp.status === 'error:not_installed' ? '⚠️ Nikto не установлен' : '⚠️ Ошибка сканирования';
+                vulnDot.className = 'status-dot';
+                vulnDot.style.background = '#ffaa00'; // Оранжевый для предупреждения
+                vulnDetails.textContent = resp?.output || 'Неизвестная ошибка';
+            } else {
+                // Успешное выполнение
+                vulnText.textContent = '✓ Nikto scan завершен';
+                vulnDot.className = 'status-dot';
+                vulnDot.style.background = '#4CAF50'; // Зеленый для успеха
+                vulnDot.classList.add('active');
+                const statusLine = resp?.status ? `Статус: ${resp.status}\n` : '';
+                const output = resp?.output || 'Нет данных от Nikto.';
+                vulnDetails.textContent = statusLine + output;
+            }
         } catch (e) {
             vulnText.textContent = '❌ Не удалось запустить Nikto';
             vulnDot.className = 'status-dot inactive';
             const msg = e?.message || e.toString();
-            if (msg === 'BACKEND_NOT_RUNNING') {
+            if (msg === 'BACKEND_NOT_RUNNING' || msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
                 vulnDetails.textContent = '⚠️ Backend не запущен. Стартуйте backend на http://localhost:8000';
+            } else if (msg.includes('HTTP error! status: 500')) {
+                vulnDetails.textContent = '⚠️ Ошибка на сервере. Проверьте логи backend сервера.';
             } else {
                 vulnDetails.textContent = `Ошибка: ${msg}`;
             }
@@ -1430,7 +1448,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             console.log('Making direct API call to:', url);
-            const response = await fetch(url, options);
+            
+            // Стандартный таймаут для всех запросов
+            const timeoutDuration = 60000; // 60 секунд
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), timeoutDuration);
+            
+            const response = await fetch(url, {
+                ...options,
+                signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
 
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);

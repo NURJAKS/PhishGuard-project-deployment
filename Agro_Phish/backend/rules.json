@@ -2,14 +2,14 @@
   "blacklist_domains": [
     "cyber-police-detailed-test.com",
     "baikonurmed.kz",
-    "z.kyz2dar-cia.net",
     "195.12.113.2",
-    "kyz7dar-xbf.net"
+    "autoban.kz"
   ],
   "whitelist_domains": [
     "bankffin-kz.netlify.app",
     "test-whitelist-example.com",
-    "halykbank-kz.netlify.app"
+    "halykbank-kz.netlify.app",
+    "kyz7dar-xbf.net"
   ],
   "suspicious_keywords": [],
   "trusted_domains": [],

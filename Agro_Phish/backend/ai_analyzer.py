@@ -287,16 +287,28 @@ HTML (первые 15000 символов):
   - safety_points: массив строк с положительными признаками безопасности (для безопасных сайтов) или проблемами (для опасных), простым языком, например: [Соединение с сайтом надежно защищено., Адрес сайта соответствует названию банка., Сайт выглядит как настоящий банковский ресурс.]
   - conclusion: заключительное утверждение простым языком, например: Сайт использует надежное защищенное соединение. Адрес сайта является подлинным и соответствует банку."""
     
-    # Пробуем Google AI (передаем URL для сравнения с оригинальными источниками)
-    logger.info(f"[PAYMENT AI] Attempting Google AI Studio with official sources comparison...")
-    result = _google_ai_analyze_payment(prompt_text, url)
-    provider_used = "google"
+    # Проверяем наличие валидного Google API ключа
+    google_api_key = os.getenv("GOOGLE_API_KEY", DEFAULT_GOOGLE_API_KEY)
+    has_valid_google_key = google_api_key and google_api_key != DEFAULT_GOOGLE_API_KEY and google_api_key.strip() != ""
+    openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
+    has_openrouter_key = openrouter_api_key and openrouter_api_key.strip() != ""
     
-    # Fallback на OpenRouter если Google не работает
-    if not result:
-        logger.warning(f"[PAYMENT AI] Google AI failed, trying OpenRouter...")
+    # Если есть OpenRouter ключ, но нет валидного Google ключа - используем OpenRouter сразу
+    if has_openrouter_key and not has_valid_google_key:
+        logger.info(f"[PAYMENT AI] No valid Google API key, using OpenRouter directly...")
         result = _openrouter_analyze_payment(prompt_text)
         provider_used = "openrouter"
+    else:
+        # Пробуем Google AI (передаем URL для сравнения с оригинальными источниками)
+        logger.info(f"[PAYMENT AI] Attempting Google AI Studio with official sources comparison...")
+        result = _google_ai_analyze_payment(prompt_text, url)
+        provider_used = "google"
+        
+        # Fallback на OpenRouter если Google не работает
+        if not result and has_openrouter_key:
+            logger.warning(f"[PAYMENT AI] Google AI failed, trying OpenRouter...")
+            result = _openrouter_analyze_payment(prompt_text)
+            provider_used = "openrouter"
     
     # Парсим результат
     if result:
@@ -501,16 +513,28 @@ def _analyze_with_llm(url: str, html_excerpt: str, js_urls: List[str]) -> Dict[s
     
     logger.info(f"[SCAN STEP 3] Prompt prepared: {len(prompt)} chars")
     
-    # Try Google first (передаем URL для сравнения с оригинальными источниками)
-    logger.info(f"[SCAN STEP 3] Attempting Google AI Studio with official sources comparison...")
-    result = _google_ai_analyze(prompt, url)
-    provider_used = "google"
+    # Проверяем наличие валидного Google API ключа
+    google_api_key = os.getenv("GOOGLE_API_KEY", DEFAULT_GOOGLE_API_KEY)
+    has_valid_google_key = google_api_key and google_api_key != DEFAULT_GOOGLE_API_KEY and google_api_key.strip() != ""
+    openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
+    has_openrouter_key = openrouter_api_key and openrouter_api_key.strip() != ""
     
-    # Fallback to OpenRouter if Google fails
-    if not result:
-        logger.warning(f"[SCAN STEP 3] Google AI failed, trying OpenRouter...")
+    # Если есть OpenRouter ключ, но нет валидного Google ключа - используем OpenRouter сразу
+    if has_openrouter_key and not has_valid_google_key:
+        logger.info(f"[SCAN STEP 3] No valid Google API key, using OpenRouter directly...")
         result = _openrouter_analyze(prompt)
         provider_used = "openrouter"
+    else:
+        # Try Google first (передаем URL для сравнения с оригинальными источниками)
+        logger.info(f"[SCAN STEP 3] Attempting Google AI Studio with official sources comparison...")
+        result = _google_ai_analyze(prompt, url)
+        provider_used = "google"
+        
+        # Fallback to OpenRouter if Google fails
+        if not result and has_openrouter_key:
+            logger.warning(f"[SCAN STEP 3] Google AI failed, trying OpenRouter...")
+            result = _openrouter_analyze(prompt)
+            provider_used = "openrouter"
     
     # Parse result
     if result:

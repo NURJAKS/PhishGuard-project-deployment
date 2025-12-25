@@ -15,6 +15,10 @@ import socket
 import subprocess
 import shutil
 import concurrent.futures
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(
@@ -494,6 +498,9 @@ async def analyze_payment(req: PaymentAnalysisRequest, db: Session = Depends(get
         # Продолжаем без AI анализа
 
     # Объединяем результаты AI с базовым анализом (ВСЕГДА добавляем в explain, даже если вердикт "неизвестно")
+    if "explain" not in result:
+        result["explain"] = {}
+    
     if ai_result:
         # Если AI говорит "опасно", повышаем score (только если вердикт не "неизвестно")
         if ai_result.get("verdict") and ai_result.get("verdict") != "неизвестно" and ai_result.get("verdict") == "опасно":
@@ -512,8 +519,6 @@ async def analyze_payment(req: PaymentAnalysisRequest, db: Session = Depends(get
                         result["reasons"].append(f"ai_detected: {risk}")
         
         # Добавляем AI объяснение в explain (ВСЕГДА, даже если платежная форма не найдена или вердикт "неизвестно")
-        if "explain" not in result:
-            result["explain"] = {}
         result["explain"]["ai_analysis"] = {
             "verdict": ai_result.get("verdict", "неизвестно"),
             "risk_percent": ai_result.get("risk_percent", 0),
@@ -527,10 +532,19 @@ async def analyze_payment(req: PaymentAnalysisRequest, db: Session = Depends(get
             "provider": ai_result.get("provider", "none")
         }
     else:
-        # Если AI анализ не выполнен, все равно добавляем пустую структуру для отображения ошибки
-        if "explain" not in result:
-            result["explain"] = {}
-        result["explain"]["ai_analysis"] = None
+        # Если AI анализ не выполнен, добавляем структуру с информацией об ошибке
+        result["explain"]["ai_analysis"] = {
+            "verdict": "неизвестно",
+            "risk_percent": 0,
+            "explanation": "AI анализ не выполнен. Проверьте настройки API ключей или подключение к интернету.",
+            "risks": ["AI анализ недоступен"],
+            "connection_status": "неизвестно",
+            "address_check": "неизвестно",
+            "redirects": "неизвестно",
+            "safety_points": [],
+            "conclusion": "Не удалось выполнить анализ с помощью AI. Рекомендуется проявить осторожность.",
+            "provider": "none"
+        }
 
     parsed = urlparse(url)
     domain = parsed.netloc.lower() if parsed and parsed.netloc else None
@@ -586,9 +600,15 @@ class AiScanRequest(BaseModel):
 async def ai_scan(req: AiScanRequest):
     """LLM-based risk analysis using OpenRouter (set OPENROUTER_API_KEY)."""
     try:
+        if not req.urls or len(req.urls) == 0:
+            raise HTTPException(status_code=400, detail="URLs list is empty")
+        
         result = analyze_urls_with_llm(req.urls)
         return result
+    except HTTPException:
+        raise
     except Exception as e:
+        logging.error(f"[AI SCAN] Error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"AI scan error: {str(e)}")
 
 
@@ -646,9 +666,7 @@ def _ensure_gobuster_available(wordlist: Optional[str]) -> tuple[str, str]:
     # Используем папку wordlists, если wordlist не указан или если указано только имя файла
     if not wordlist:
         wl_candidates = [
-            BASE_DIR / "extension" / "tools" / "wordlists" / "directory-list-2.3-small.txt",
             BASE_DIR / "wordlists" / "common.txt",
-            BASE_DIR / "tools" / "gobuster" / "wordlist.txt"
         ]
         for wl_path in wl_candidates:
             if wl_path.exists():
@@ -804,14 +822,30 @@ def _clean_gobuster_output(raw_output: str, wordlist_path: str, target_url: str)
 async def nikto_vuln_scan(req: VulnScanRequest):
     """Запускает локальный Nikto против указанного URL и возвращает stdout/stderr."""
     target = _validate_scan_url(req.url)
-    perl_bin = _ensure_nikto_available()
-
+    
+    # Проверяем доступность Nikto с graceful handling
+    try:
+        perl_bin = _ensure_nikto_available()
+    except HTTPException as e:
+        # Если Nikto не установлен, возвращаем информационное сообщение, а не ошибку 500
+        if e.status_code == 500:
+            return VulnScanResponse(
+                status="error:not_installed",
+                target=target,
+                output=f"⚠️ Nikto не установлен.\n\nДля установки выполните:\n  git clone https://github.com/sullo/nikto.git Agro_Phish/tools/nikto\n\nИли используйте другие инструменты сканирования (Gobuster, Port Scan)."
+            )
+        raise  # Перебрасываем другие HTTPException
+    
+    # Конфигурация для быстрого сканирования уязвимостей
+    # -maxtime: 30 секунд для быстрого сканирования
+    # -timeout: 10 секунд для запросов
+    # -Tuning: Используем основные опции для поиска уязвимостей
     cmd = [
         perl_bin,
         str(NIKTO_PROGRAM),
         "-ask", "no",
-        "-maxtime", "30s",
-        "-timeout", "10",
+        "-maxtime", "30s",  # 30 секунд
+        "-timeout", "10",  # 10 секунд
         "-h", target,
     ]
 
@@ -821,19 +855,31 @@ async def nikto_vuln_scan(req: VulnScanRequest):
             capture_output=True,
             text=True,
             cwd=str(NIKTO_PROGRAM.parent),
-            timeout=60
+            timeout=60  # 60 секунд (30s сканирование + запас)
         )
     except subprocess.TimeoutExpired:
         raise HTTPException(status_code=504, detail="Nikto scan timed out after 60s")
     except Exception as e:
+        logging.error(f"[NIKTO] Execution error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Nikto execution error: {str(e)}")
 
     output = (completed.stdout or "") + ("\n" + completed.stderr if completed.stderr else "")
     output = output.strip() or "Nikto завершил работу без вывода."
+    
+    # Убираем предупреждение о таймауте из статуса, так как это нормально для быстрого сканирования
+    # Проверяем, есть ли реальные результаты сканирования
+    has_results = "item(s) reported" in output or "host(s) tested" in output or "+ " in output
+    
+    # Если есть результаты, считаем сканирование успешным даже при таймауте
+    if has_results and ("ERROR: Host maximum execution time" in output or completed.returncode != 0):
+        # Это нормальное завершение с результатами, просто таймаут был достигнут
+        status = "ok"
+    else:
+        status = "ok" if completed.returncode == 0 else f"error:{completed.returncode}"
+    
     if len(output) > 12000:
         output = output[:12000] + "\n...output truncated..."
 
-    status = "ok" if completed.returncode == 0 else f"error:{completed.returncode}"
     return VulnScanResponse(status=status, target=target, output=output)
 
 
@@ -1179,8 +1225,8 @@ async def port_scan(req: PortScanRequest):
             masscan_bin,
             target_ip,
             "-p", port_range,  # Сканируем все порты 1-65535
-            "--rate", "10000",  # Увеличиваем скорость до 10000 пакетов/сек для быстрого сканирования
-            "--wait", "5",  # Ждем 5 секунд для завершения сканирования
+            "--rate", "10000",  # Скорость сканирования
+            "--wait", "10",  # Увеличено до 10 секунд для завершения сканирования всех портов
             "-oJ", "-",  # JSON формат вывода
         ]
         
@@ -1193,12 +1239,18 @@ async def port_scan(req: PortScanRequest):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                bufsize=0  # Небуферизованный режим
+                bufsize=1  # Буферизованный режим
             )
             
             # Читаем вывод с таймаутом
             stdout, stderr = process.communicate(timeout=120)
             returncode = process.returncode
+            
+            # Логируем ошибки если есть
+            if stderr:
+                logging.warning(f"[PORTSCAN] Masscan stderr: {stderr[:200]}")
+            if returncode != 0:
+                logging.warning(f"[PORTSCAN] Masscan return code: {returncode}")
             
             # Дополнительная пауза для завершения записи всех результатов
             # Masscan может выводить последние результаты с задержкой
@@ -1214,66 +1266,80 @@ async def port_scan(req: PortScanRequest):
         # Парсим JSON вывод masscan
         # Masscan выводит массив объектов вида:
         # [{"ip": "...", "ports": [{"port": 80, "proto": "tcp", ...}]}, ...]
-        # Masscan может выводить прогресс в stdout вместе с JSON, поэтому используем regex
+        # Masscan может выводить прогресс в stdout вместе с JSON
         if stdout:
             stdout_clean = stdout.strip()
             logging.info(f"[PORTSCAN] Masscan stdout length: {len(stdout_clean)}")
+            logging.debug(f"[PORTSCAN] Masscan stdout preview: {stdout_clean[:500]}")
             
-            # Метод 1: Ищем JSON массив в выводе используя regex
-            # Masscan выводит прогресс перед JSON, поэтому ищем последний JSON массив
-            json_match = re.search(r'\[.*\]', stdout_clean, re.DOTALL)
-            if json_match:
-                json_str = json_match.group(0)
+            # Улучшенный метод: Парсим построчно, так как masscan выводит каждый объект на отдельной строке
+            # Masscan выводит формат: [\n{...},\n{...},\n]
+            # Лучший способ - найти все JSON объекты построчно и собрать порты
+            for line in stdout_clean.split('\n'):
+                line = line.strip()
+                # Пропускаем пустые строки, символы массива и запятые
+                if not line or line in ['[', ']', ',']:
+                    continue
+                # Убираем запятые в конце строк перед парсингом
+                line_clean = line.rstrip(',').strip()
+                if not line_clean or line_clean in ['[', ']']:
+                    continue
+                # Пробуем распарсить строку как JSON объект
                 try:
-                    results = json.loads(json_str)
-                    if isinstance(results, list):
-                        logging.info(f"[PORTSCAN] Parsed JSON array with {len(results)} items")
-                        for item in results:
-                            if isinstance(item, dict) and 'ports' in item:
-                                ports_list = item['ports']
-                                if isinstance(ports_list, list):
-                                    for port_info in ports_list:
-                                        if isinstance(port_info, dict) and 'port' in port_info:
-                                            port = port_info['port']
-                                            if port not in masscan_ports:
-                                                masscan_ports.append(int(port))
-                                                logging.info(f"[PORTSCAN] Found port: {port}")
-                except json.JSONDecodeError as e:
-                    logging.warning(f"[PORTSCAN] JSON array parse failed: {e}, trying direct parse")
-                    # Пробуем метод 2
+                    item = json.loads(line_clean)
+                    if isinstance(item, dict) and 'ports' in item:
+                        ports_list = item['ports']
+                        if isinstance(ports_list, list):
+                            for port_info in ports_list:
+                                if isinstance(port_info, dict) and 'port' in port_info:
+                                    port = port_info['port']
+                                    if port not in masscan_ports:
+                                        masscan_ports.append(int(port))
+                                        logging.info(f"[PORTSCAN] Found port: {port}")
+                except (json.JSONDecodeError, ValueError, TypeError) as e:
+                    # Это не JSON объект, пропускаем
+                    continue
             
-            # Метод 2: Если regex не сработал, пробуем прямой парсинг всего stdout
+            # Если построчный парсинг не нашел порты, пробуем найти JSON массив целиком
             if not masscan_ports:
-                try:
-                    results = json.loads(stdout_clean)
-                    if isinstance(results, list):
-                        for item in results:
-                            if isinstance(item, dict) and 'ports' in item:
-                                ports_list = item['ports']
-                                if isinstance(ports_list, list):
-                                    for port_info in ports_list:
-                                        if isinstance(port_info, dict) and 'port' in port_info:
-                                            port = port_info['port']
-                                            if port not in masscan_ports:
-                                                masscan_ports.append(int(port))
-                except json.JSONDecodeError:
-                    # Метод 3: Построчный парсинг
-                    for line in stdout_clean.split('\n'):
-                        line = line.strip().rstrip(',')
-                        if not line or line in ['[', ']', ',']:
-                            continue
+                json_start = stdout_clean.rfind('[')
+                json_end = stdout_clean.rfind(']')
+                
+                if json_start != -1 and json_end != -1 and json_end > json_start:
+                    # Берем текст между первым [ и последним ]
+                    # Но нужно очистить от прогресс-строк
+                    json_candidate = stdout_clean[json_start:json_end + 1]
+                    # Убираем все строки, которые не являются частью JSON
+                    json_lines = []
+                    in_array = False
+                    for line in json_candidate.split('\n'):
+                        line = line.strip()
+                        if line == '[':
+                            in_array = True
+                            json_lines.append('[')
+                        elif line == ']':
+                            json_lines.append(']')
+                            break
+                        elif in_array and (line.startswith('{') or line == ','):
+                            json_lines.append(line)
+                    
+                    if json_lines:
+                        json_str = '\n'.join(json_lines)
                         try:
-                            item = json.loads(line)
-                            if isinstance(item, dict) and 'ports' in item:
-                                ports_list = item['ports']
-                                if isinstance(ports_list, list):
-                                    for port_info in ports_list:
-                                        if isinstance(port_info, dict) and 'port' in port_info:
-                                            port = port_info['port']
-                                            if port not in masscan_ports:
-                                                masscan_ports.append(int(port))
+                            results = json.loads(json_str)
+                            if isinstance(results, list):
+                                for item in results:
+                                    if isinstance(item, dict) and 'ports' in item:
+                                        ports_list = item['ports']
+                                        if isinstance(ports_list, list):
+                                            for port_info in ports_list:
+                                                if isinstance(port_info, dict) and 'port' in port_info:
+                                                    port = port_info['port']
+                                                    if port not in masscan_ports:
+                                                        masscan_ports.append(int(port))
+                                                        logging.info(f"[PORTSCAN] Found port (array parse): {port}")
                         except (json.JSONDecodeError, ValueError, TypeError):
-                            continue
+                            pass
             
             # Сортируем порты для консистентности
             masscan_ports.sort()
@@ -1286,8 +1352,9 @@ async def port_scan(req: PortScanRequest):
             output_lines.append(f"  Scanned: ALL ports (1-65535)")
             output_lines.append(f"  Found: {len(masscan_ports)} open port(s)")
             output_lines.append("")
-        elif completed.returncode == 0:
+        elif returncode == 0:
             # Masscan завершился успешно но портов не найдено
+            masscan_worked = True
             output_lines.append("✓ Masscan scan completed successfully!")
             output_lines.append(f"  Scanned: ALL ports (1-65535)")
             output_lines.append(f"  Found: 0 open ports")

@@ -55,3 +55,4 @@ server
 server-status
 robots.txt
 sitemap.xml
+administrator
