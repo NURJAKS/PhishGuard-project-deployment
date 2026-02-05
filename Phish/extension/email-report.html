@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>PhishGuard — Email report</title>
+    <style>
+      :root{
+        --bg:#0b0f14; --panel:#111824; --panel2:#0f1620; --text:#d8dde6; --muted:#9aa2ad;
+        --border:rgba(255,255,255,0.10);
+        --accent:rgba(84,157,255,0.9);
+        --low:#94A3B8; --med:#F59E0B; --high:#9A3412;
+      }
+      html,body{height:100%;}
+      body{margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial;}
+      .wrap{max-width:920px;margin:0 auto;padding:18px;}
+      .top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
+      .title{font-weight:800;letter-spacing:0.02em;}
+      .sub{color:var(--muted);font-size:12px;margin-top:6px;line-height:1.5;}
+      .card{margin-top:14px;border:1px solid var(--border);background:linear-gradient(180deg,var(--panel),var(--panel2));border-radius:12px;padding:14px;}
+      .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
+      .badge{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;border:1px solid var(--border);font-size:12px;color:var(--muted);}
+      .dot{width:10px;height:10px;border-radius:999px;background:var(--low);}
+      .kv{display:grid;grid-template-columns:140px 1fr;gap:8px 12px;margin-top:12px;}
+      .k{color:var(--muted);font-size:12px;}
+      .v{font-size:12px;word-break:break-word;}
+      h3{margin:14px 0 8px 0;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);}
+      ul{margin:6px 0 0 18px;color:var(--text);font-size:12px;line-height:1.55;}
+      li{margin:4px 0;}
+      .btn{
+        display:inline-flex;align-items:center;justify-content:center;
+        padding:9px 12px;border-radius:10px;border:1px solid rgba(84,157,255,0.28);
+        background:rgba(84,157,255,0.14);color:#dfe8ff;font-weight:800;font-size:12px;cursor:pointer;
+        text-decoration:none;
+      }
+      .muted{color:var(--muted);}
+      .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;}
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="top">
+        <div>
+          <div class="title">Email / Trust assessment report</div>
+          <div class="sub">AI-анализ письма на основе технической проверки метаданных, ссылок и структуры.</div>
+        </div>
+        <a class="btn" href="popup.html" target="_blank" rel="noreferrer">Открыть PhishGuard</a>
+      </div>
+
+      <div class="card">
+        <div class="row">
+          <div class="badge"><span class="dot" id="riskDot"></span><span id="riskLine">Оценка доверия письма: —</span></div>
+          <div class="badge"><span class="muted">Время:</span> <span id="ts">—</span></div>
+          <div class="badge"><span class="muted">Платформа:</span> <span id="platform">—</span></div>
+        </div>
+
+        <h3>Summary</h3>
+        <div class="v" id="summary">—</div>
+
+        <h3>Reasons</h3>
+        <ul id="reasons"><li class="muted">—</li></ul>
+
+        <h3>Recommendations</h3>
+        <ul id="recs"><li class="muted">—</li></ul>
+      </div>
+
+      <div class="sub" style="margin-top:12px;">
+        Примечание: вывод сформирован AI на основе технической проверки. Результат является индикативным и может требовать ручной проверки.
+      </div>
+    </div>
+
+    <script src="email-report.js"></script>
+  </body>
+</html>
+
+

@@ -1,0 +1,21 @@
+{
+  "blacklist_domains": [
+    "cyber-police-detailed-test.com",
+    "baikonurmed.kz",
+    "195.12.113.2",
+    "autoban.kz"
+  ],
+  "whitelist_domains": [
+    "bankffin-kz.netlify.app",
+    "test-whitelist-example.com",
+    "halykbank-kz.netlify.app",
+    "localhost",
+    "37.140.243.198"
+  ],
+  "suspicious_keywords": [],
+  "trusted_domains": [],
+  "suspicious_tlds": [],
+  "http_allowlist": [
+    "localhost"
+  ]
+}

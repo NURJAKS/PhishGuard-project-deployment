@@ -108,10 +108,11 @@ brew install python3
 ```bash
 cd backend
 cat > .env << EOF
-GOOGLE_AI_API_KEY=your_key_here
-OPENROUTER_API_KEY=your_key_here
+GOOGLE_AI_API_KEY=AIzaSyBfztI5CClqFjGa9RPvPdPAznzaerQ4LgQ
+OPENROUTER_API_KEY=AIzaSyBfztI5CClqFjGa9RPvPdPAznzaerQ4LgQ
 EOF
 ```
 
 **Важно**: `.env` файл уже в `.gitignore` и не будет закоммичен.
 
+я

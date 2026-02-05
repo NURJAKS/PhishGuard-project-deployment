@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PhishGuard</title>
+    <style>
+        body {
+            width: 350px;
+            min-height: 500px;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 50%, #1a1a1a 100%);
+            color: #e0e0e0;
+        }
+        
+        .header {
+            background: rgba(0,0,0,0.4);
+            padding: 20px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 300;
+        }
+        
+        .header .subtitle {
+            margin: 5px 0 0 0;
+            font-size: 12px;
+            opacity: 0.8;
+        }
+        
+        .content {
+            padding: 20px;
+        }
+        
+        .status-card {
+            background: rgba(40, 40, 40, 0.8);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            border: 1px solid rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+        }
+        
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+        
+        .status-dot.active { background: #4CAF50; }
+        .status-dot.inactive { background: #f44336; }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .stat-item {
+            background: rgba(40, 40, 40, 0.8);
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .stat-number {
+            font-size: 20px;
+            font-weight: bold;
+            display: block;
+        }
+        
+        .stat-label {
+            font-size: 11px;
+            opacity: 0.8;
+        }
+        
+        .current-url {
+            background: rgba(40, 40, 40, 0.8);
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 15px;
+            word-break: break-all;
+            font-size: 12px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .btn {
+            flex: 1;
+            padding: 10px 8px;
+            border: 1px solid rgba(59, 130, 246, 0.28);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            background: #1F2933;
+            color: #E5E7EB;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .btn:hover {
+            background: #374151;
+            border-color: rgba(59, 130, 246, 0.45);
+        }
+        
+        .btn:focus-visible {
+            outline: 2px solid rgba(59, 130, 246, 0.65);
+            outline-offset: 2px;
+        }
+        
+        .btn:disabled,
+        .btn[disabled] {
+            background: #4B5563;
+            border-color: rgba(255,255,255,0.12);
+            color: rgba(229, 231, 235, 0.75);
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        /* Remove per-button colors: single accent for all action buttons (AI analytics style). */
+        
+        .footer {
+            text-align: center;
+            padding: 15px;
+            font-size: 11px;
+            opacity: 0.7;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            background: rgba(0,0,0,0.2);
+        }
+        
+        .footer a {
+            color: #b0b0b0;
+        }
+        
+        .footer a:hover {
+            color: #e0e0e0;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .spinner {
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top: 2px solid white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .error {
+            background: rgba(200, 50, 50, 0.3);
+            border: 1px solid rgba(200, 50, 50, 0.6);
+            border-radius: 6px;
+            padding: 10px;
+            margin-bottom: 10px;
+            font-size: 12px;
+            color: #ffcccc;
+        }
+        
+        .muted {
+            opacity: 0.7;
+            color: #b0b0b0;
+        }
+
+        .pg-switch {
+            position: relative;
+            display: inline-block;
+            width: 34px;
+            height: 18px;
+            user-select: none;
+        }
+        .pg-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .pg-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(107, 114, 128, 0.35); /* OFF: neutral gray */
+            border: 1px solid rgba(255,255,255,0.12);
+            transition: 180ms ease;
+            border-radius: 999px;
+        }
+        .pg-slider:before {
+            position: absolute;
+            content: "";
+            height: 14px;
+            width: 14px;
+            left: 2px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(229, 231, 235, 0.9);
+            transition: 180ms ease;
+            border-radius: 999px;
+        }
+        .pg-switch input:checked + .pg-slider {
+            background: rgba(59, 130, 246, 0.45); /* ON: accent */
+            border-color: rgba(59, 130, 246, 0.55);
+        }
+        .pg-switch input:checked + .pg-slider:before {
+            transform: translate(16px, -50%);
+            background: rgba(223, 232, 255, 0.95);
+        }
+
+        .email-auto-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            flex-wrap: nowrap;
+        }
+        .email-auto-title {
+            font-weight: 700;
+            font-size: 12px;
+            letter-spacing: 0.02em;
+            min-width: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .email-auto-desc {
+            font-size: 11px;
+            line-height: 1.4;
+            margin-top: 6px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>PhishGuard</h1>
+    </div>
+    
+    <div class="content">
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <div>Загрузка...</div>
+        </div>
+        
+        <div id="error" class="error" style="display: none;"></div>
+        
+        <div id="main-content" style="display: none;">
+            <div class="status-card">
+                <div class="status-indicator">
+                    <div id="status-dot" class="status-dot"></div>
+                    <div id="status-text">Проверка...</div>
+                </div>
+                <div id="current-url" class="current-url"></div>
+            </div>
+
+            <div class="status-card" id="email-auto-card">
+                <div class="email-auto-header">
+                    <div class="email-auto-title">Email: автоматическая проверка</div>
+                    <label class="pg-switch" style="flex:0 0 auto;">
+                        <input id="email-auto-toggle" type="checkbox">
+                        <span class="pg-slider"></span>
+                    </label>
+                </div>
+                <div class="muted email-auto-desc">Анализ метаданных и ссылок при открытии письма</div>
+            </div>
+            
+            <div class="stats">
+                <div class="stat-item">
+                    <span id="total-blocked" class="stat-number">-</span>
+                    <span class="stat-label">Заблокировано</span>
+                </div>
+                <div class="stat-item">
+                    <span id="total-warned" class="stat-number">-</span>
+                    <span class="stat-label">Предупреждений</span>
+                </div>
+            </div>
+            
+            <div class="action-buttons">
+                <button id="open-dashboard" class="btn">Dashboard</button>
+                <button id="open-admin-panel" class="btn">Admin Panel</button>
+            </div>
+
+            <div class="action-buttons">
+                <button id="open-documents" class="btn">Documents</button>
+            </div>
+
+            <div class="action-buttons">
+                <button id="scan-secrets" class="btn">Проверка сайта</button>
+                <button id="check-dns" class="btn">Проверка DNS</button>
+                <button id="clear-cache" class="btn">Очистить кэш</button>
+            </div>
+
+            <div class="action-buttons">
+                <button id="ai-scan" class="btn">AI Scan</button>
+                <button id="vuln-scan" class="btn">Vuln Scan</button>
+                <button id="sql-scan" class="btn">SQL</button>
+                <button id="crawler-scan" class="btn">Crawler</button>
+            </div>
+
+            <div class="action-buttons">
+                <button id="php-scan" class="btn">PHP</button>
+            </div>
+
+
+            <div id="paymentStatus" class="status-card" style="display:none;">
+                <div class="status-indicator">
+                    <div id="payment-dot" class="status-dot"></div>
+                    <div id="payment-text">Анализ оплаты...</div>
+                </div>
+                <div id="payment-reasons" class="muted" style="font-size:12px; line-height:1.6; margin-top:10px;"></div>
+                <div id="payment-consequences" style="display:none; margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.1); font-size:11px; color:#ffcccc;"></div>
+                <div id="payment-recommendations" style="display:none; margin-top:10px; padding:10px; background:rgba(255,170,0,0.1); border-radius:6px; border:1px solid rgba(255,170,0,0.3); font-size:11px; color:#ffd700;"></div>
+            </div>
+
+            <div id="secretScanStatus" class="status-card" style="display:none;">
+                <div class="status-indicator">
+                    <div id="secret-dot" class="status-dot"></div>
+                    <div id="secret-text">Проверка сайта...</div>
+                </div>
+                <div id="secret-summary" class="muted" style="font-size:13px; margin-top:10px; line-height:1.5;"></div>
+                <div id="secret-links-section" style="display:none; margin-top:15px; padding-top:15px; border-top:1px solid rgba(255,255,255,0.1);">
+                    <div style="font-size:11px; opacity:0.8; margin-bottom:8px;">Проверенные ссылки:</div>
+                    <div id="secret-links" style="font-size:11px; max-height:150px; overflow-y:auto; word-break:break-all;"></div>
+                </div>
+            </div>
+
+            <div id="aiScanStatus" class="status-card" style="display:none;">
+                <div class="status-indicator">
+                    <div id="ai-dot" class="status-dot"></div>
+                    <div id="ai-text">Сканирование...</div>
+                </div>
+                <div id="ai-details" class="muted" style="font-size:12px; white-space:pre-wrap;"></div>
+            </div>
+
+            <div id="vulnScanStatus" class="status-card" style="display:none;">
+                <div class="status-indicator">
+                    <div id="vuln-dot" class="status-dot"></div>
+                    <div id="vuln-text">Запуск Nikto...</div>
+                </div>
+                <div id="vuln-details" class="muted" style="font-size:11px; white-space:pre-wrap; margin-top:8px;"></div>
+            </div>
+
+            <div id="dnsCheckStatus" class="status-card" style="display:none;">
+                <div class="status-indicator">
+                    <div id="dns-dot" class="status-dot"></div>
+                    <div id="dns-text">Проверка DNS...</div>
+                </div>
+                <div id="dns-domain" style="font-size:11px; opacity:0.8; margin-top:8px; word-break:break-all;"></div>
+                <div id="dns-content" style="margin-top:12px; font-size:12px; line-height:1.6;">
+                    <div id="dns-ips" style="margin-bottom:8px;"></div>
+                    <div id="dns-mx" style="margin-bottom:8px; display:none;"></div>
+                    <div id="dns-geo" style="margin-bottom:8px; display:none;"></div>
+                    <div id="dns-hosting" style="margin-bottom:8px; display:none;"></div>
+                </div>
+            </div>
+
+            <div class="action-buttons">
+                <button id="paymentBack" class="btn">Back to safety</button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="footer">
+        PhishGuard v1.0.0
+    </div>
+    
+    <script src="popup.js"></script>
+</body>
+</html>
+
+

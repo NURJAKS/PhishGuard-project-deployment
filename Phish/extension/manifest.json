@@ -1,0 +1,54 @@
+{
+  "manifest_version": 3,
+  "name": "PhishGuard",
+  "short_name": "PhishGuard",
+  "version": "1.1.2",
+  "description": "Защита от фишинга и мошеннических сайтов",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "webNavigation",
+    "tabs",
+    "scripting",
+    "contextMenus",
+    "notifications"
+  ],
+  "host_permissions": [
+    "http://localhost:8002/*",
+    "http://127.0.0.1:8002/*",
+    "https://*/*",
+    "http://*/*",
+    "https://cloudflare-dns.com/*",
+    "https://dns.google/*",
+    "https://ipinfo.io/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' http://localhost:* http://127.0.0.1:* https://cloudflare-dns.com https://dns.google https://ipinfo.io; img-src 'self' data:; style-src 'self' 'unsafe-inline'"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/*", "dashboard.html", "dashboard.js", "admin-panel.html", "admin-panel.js", "document-viewer.html", "document-viewer.js", "invoice-viewer.html", "invoice-viewer.js", "email-report.html", "email-report.js"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "PhishGuard"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
