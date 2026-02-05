@@ -1,0 +1,15 @@
+version: "3.7"
+services:
+
+  monetdb:
+    container_name: jsql-monetdb
+    image: monetdb/monetdb-r-docker
+    ports:
+      - "50000:50000"
+    environment:
+      MONET_DATABASE: db
+    networks:
+      - jsql-network
+
+networks:
+  jsql-network:

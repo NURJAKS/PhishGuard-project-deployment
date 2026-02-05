@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<site name="Reflow Maven Skin"
+    xmlns="http://maven.apache.org/SITE/2.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/SITE/2.0.0 http://maven.apache.org/xsd/site-2.0.0.xsd">
+
+    <skin>
+        <groupId>io.github.devacfr.maven.skins</groupId>
+        <artifactId>reflow-maven-skin</artifactId>
+        <version>${site.skin.version}</version>
+    </skin>
+
+    <custom>
+        <reflowSkin>
+            <theme>bootswatch-slate</theme>
+            <header type="banner" enabled="false" />
+            <titleTemplate>%2$s - jSQL Injection Maven Site</titleTemplate>
+            <brand>
+                <name><![CDATA[
+                <span class="color-highlight">jSQL Injection</span> Maven Site
+                ]]></name>
+                <href>${project.url}</href>
+            </brand>
+            <navbar theme="dark" background="dark" center="false" />
+            <breadcrumbs>false</breadcrumbs>
+            <footer theme="dark" background="dark" />
+            <bottomNav>
+                <!-- hide footer -->
+                <column/>
+            </bottomNav>
+        </reflowSkin>
+    </custom>
+
+    <body>
+        <links>
+            <item name="Back to GitHub" href="https://github.com/ron190/jsql-injection" />
+        </links>
+        <!-- inherits required -->
+        <!-- always displayed -->
+        <menu ref="reports" inherit="bottom" />
+        <!-- displayed on module only -->
+        <menu ref="modules" inherit="bottom" />
+        <!-- displayed on root only -->
+        <menu ref="parent" inherit="bottom" />
+    </body>
+</site>

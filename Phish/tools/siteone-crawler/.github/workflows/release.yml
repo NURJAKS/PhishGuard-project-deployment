@@ -1,0 +1,240 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.0.9)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Get version
+      id: get_version
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          VERSION="${{ github.event.inputs.version }}"
+          # Remove 'v' prefix if present
+          VERSION="${VERSION#v}"
+        else
+          VERSION=${GITHUB_REF#refs/tags/v}
+        fi
+        echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+        echo "Building version: ${VERSION}"
+    
+    - name: Download Swoole binaries
+      run: |
+        mkdir -p swoole-downloads
+        cd swoole-downloads
+        
+        # Download all Swoole binaries
+        wget https://github.com/swoole/swoole-cli/releases/download/v6.0.1.0/swoole-cli-v6.0.1-cygwin-x64.zip
+        wget https://github.com/swoole/swoole-cli/releases/download/v6.0.1.0/swoole-cli-v6.0.1-linux-arm64.tar.xz
+        wget https://github.com/swoole/swoole-cli/releases/download/v6.0.1.0/swoole-cli-v6.0.1-linux-x64.tar.xz
+        wget https://github.com/swoole/swoole-cli/releases/download/v6.0.1.0/swoole-cli-v6.0.1-macos-arm64.tar.xz
+        wget https://github.com/swoole/swoole-cli/releases/download/v6.0.1.0/swoole-cli-v6.0.1-macos-x64.tar.xz
+    
+    - name: Prepare Linux ARM64 release
+      run: |
+        VERSION=${{ steps.get_version.outputs.VERSION }}
+        RELEASE_NAME="siteone-crawler-v${VERSION}-linux-arm64"
+        
+        # Create release directory
+        mkdir -p releases/${RELEASE_NAME}
+        
+        # Copy project files (excluding certain directories)
+        for item in *; do
+          if [ "$item" != "releases" ] && [ "$item" != "swoole-downloads" ]; then
+            cp -r "$item" "releases/${RELEASE_NAME}/"
+          fi
+        done
+        
+        # Clean up unnecessary files
+        cd releases/${RELEASE_NAME}
+        rm -rf .git .github docs/ tests/ composer.json composer.lock package.json phpstan.neon phpunit.xml pack-sfx.php
+        
+        # Extract and copy Swoole binary
+        cd ../..
+        # Remove existing Linux x64 binary
+        rm -f releases/${RELEASE_NAME}/bin/swoole-cli
+        tar -xf swoole-downloads/swoole-cli-v6.0.1-linux-arm64.tar.xz
+        cp swoole-cli releases/${RELEASE_NAME}/bin/
+        chmod +x releases/${RELEASE_NAME}/bin/swoole-cli
+        # Clean up extracted binary
+        rm -f swoole-cli
+        
+        # Create tar.gz archive
+        cd releases
+        tar -czf ${RELEASE_NAME}.tar.gz ${RELEASE_NAME}
+        sudo rm -rf ${RELEASE_NAME}
+    
+    - name: Prepare Linux x64 release
+      run: |
+        VERSION=${{ steps.get_version.outputs.VERSION }}
+        RELEASE_NAME="siteone-crawler-v${VERSION}-linux-x64"
+        
+        # Create release directory
+        mkdir -p releases/${RELEASE_NAME}
+        
+        # Copy project files (excluding certain directories)
+        for item in *; do
+          if [ "$item" != "releases" ] && [ "$item" != "swoole-downloads" ]; then
+            cp -r "$item" "releases/${RELEASE_NAME}/"
+          fi
+        done
+        
+        # Clean up unnecessary files
+        cd releases/${RELEASE_NAME}
+        rm -rf .git .github docs/ tests/ composer.json composer.lock package.json phpstan.neon phpunit.xml pack-sfx.php
+        
+        # Extract and copy Swoole binary
+        cd ../..
+        # Remove existing Linux x64 binary (if any)
+        rm -f releases/${RELEASE_NAME}/bin/swoole-cli
+        tar -xf swoole-downloads/swoole-cli-v6.0.1-linux-x64.tar.xz
+        cp swoole-cli releases/${RELEASE_NAME}/bin/
+        chmod +x releases/${RELEASE_NAME}/bin/swoole-cli
+        # Clean up extracted binary
+        rm -f swoole-cli
+        
+        # Create tar.gz archive
+        cd releases
+        tar -czf ${RELEASE_NAME}.tar.gz ${RELEASE_NAME}
+        sudo rm -rf ${RELEASE_NAME}
+    
+    - name: Prepare macOS ARM64 release
+      run: |
+        VERSION=${{ steps.get_version.outputs.VERSION }}
+        RELEASE_NAME="siteone-crawler-v${VERSION}-macos-arm64"
+        
+        # Create release directory
+        mkdir -p releases/${RELEASE_NAME}
+        
+        # Copy project files (excluding certain directories)
+        for item in *; do
+          if [ "$item" != "releases" ] && [ "$item" != "swoole-downloads" ]; then
+            cp -r "$item" "releases/${RELEASE_NAME}/"
+          fi
+        done
+        
+        # Clean up unnecessary files
+        cd releases/${RELEASE_NAME}
+        rm -rf .git .github docs/ tests/ composer.json composer.lock package.json phpstan.neon phpunit.xml pack-sfx.php
+        
+        # Extract and copy Swoole binary
+        cd ../..
+        # Remove existing Linux x64 binary
+        rm -f releases/${RELEASE_NAME}/bin/swoole-cli
+        tar -xf swoole-downloads/swoole-cli-v6.0.1-macos-arm64.tar.xz
+        cp swoole-cli releases/${RELEASE_NAME}/bin/
+        chmod +x releases/${RELEASE_NAME}/bin/swoole-cli
+        # Clean up extracted binary
+        rm -f swoole-cli
+        
+        # Create tar.gz archive
+        cd releases
+        tar -czf ${RELEASE_NAME}.tar.gz ${RELEASE_NAME}
+        sudo rm -rf ${RELEASE_NAME}
+    
+    - name: Prepare macOS x64 release
+      run: |
+        VERSION=${{ steps.get_version.outputs.VERSION }}
+        RELEASE_NAME="siteone-crawler-v${VERSION}-macos-x64"
+        
+        # Create release directory
+        mkdir -p releases/${RELEASE_NAME}
+        
+        # Copy project files (excluding certain directories)
+        for item in *; do
+          if [ "$item" != "releases" ] && [ "$item" != "swoole-downloads" ]; then
+            cp -r "$item" "releases/${RELEASE_NAME}/"
+          fi
+        done
+        
+        # Clean up unnecessary files
+        cd releases/${RELEASE_NAME}
+        rm -rf .git .github docs/ tests/ composer.json composer.lock package.json phpstan.neon phpunit.xml pack-sfx.php
+        
+        # Extract and copy Swoole binary
+        cd ../..
+        # Remove existing Linux x64 binary
+        rm -f releases/${RELEASE_NAME}/bin/swoole-cli
+        tar -xf swoole-downloads/swoole-cli-v6.0.1-macos-x64.tar.xz
+        cp swoole-cli releases/${RELEASE_NAME}/bin/
+        chmod +x releases/${RELEASE_NAME}/bin/swoole-cli
+        # Clean up extracted binary
+        rm -f swoole-cli
+        
+        # Create tar.gz archive
+        cd releases
+        tar -czf ${RELEASE_NAME}.tar.gz ${RELEASE_NAME}
+        sudo rm -rf ${RELEASE_NAME}
+    
+    - name: Prepare Windows x64 release
+      run: |
+        VERSION=${{ steps.get_version.outputs.VERSION }}
+        RELEASE_NAME="siteone-crawler-v${VERSION}-win-x64"
+        
+        # Create release directory
+        mkdir -p releases/${RELEASE_NAME}
+        
+        # Copy project files (excluding certain directories)
+        for item in *; do
+          if [ "$item" != "releases" ] && [ "$item" != "swoole-downloads" ]; then
+            cp -r "$item" "releases/${RELEASE_NAME}/"
+          fi
+        done
+        
+        # Clean up unnecessary files
+        cd releases/${RELEASE_NAME}
+        rm -rf .git .github docs/ tests/ composer.json composer.lock package.json phpstan.neon phpunit.xml pack-sfx.php
+        
+        # Extract Windows Swoole
+        cd ../..
+        # Remove existing Linux x64 binary
+        rm -f releases/${RELEASE_NAME}/bin/swoole-cli
+        unzip -q swoole-downloads/swoole-cli-v6.0.1-cygwin-x64.zip
+        
+        # Copy Windows binaries and DLLs
+        cp swoole-cli-v6.0.1-cygwin-x64/bin/* releases/${RELEASE_NAME}/bin/
+        
+        # Copy etc/pki structure
+        cp -r swoole-cli-v6.0.1-cygwin-x64/etc releases/${RELEASE_NAME}/
+        
+        # Create zip archive
+        cd releases
+        zip -q -r ${RELEASE_NAME}.zip ${RELEASE_NAME}
+        
+        # Clean up - use sudo for files with permission issues
+        sudo rm -rf ${RELEASE_NAME}
+        cd ..
+        sudo rm -rf swoole-cli-v6.0.1-cygwin-x64
+    
+    - name: Upload release artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-packages
+        path: releases/*
+        retention-days: 7
+    
+    - name: Create Release
+      if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: releases/*
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

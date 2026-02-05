@@ -1,0 +1,24 @@
+package com.test.special;
+
+import com.jsql.model.InjectionModel;
+import com.jsql.view.subscriber.SubscriberLogger;
+import com.test.engine.mysql.ConcreteMySqlSuiteIT;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.RepeatedTest;
+
+import java.util.List;
+
+class AdminPageSuiteIT extends ConcreteMySqlSuiteIT {
+
+    @Override
+    public void setupInjection() {
+        this.injectionModel = new InjectionModel();
+        this.injectionModel.subscribe(new SubscriberLogger(this.injectionModel));
+    }
+    
+    @RepeatedTest(3)  // todo choose @RetryingTest or @RepeatedTest
+    void listAdminPages() {
+        int pagesFound = this.injectionModel.getResourceAccess().createAdminPages("http://localhost:8080", List.of("greeting"));
+        Assertions.assertEquals(1, pagesFound);
+    }
+}

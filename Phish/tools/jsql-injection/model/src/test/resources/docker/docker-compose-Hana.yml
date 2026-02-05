@@ -1,0 +1,17 @@
+version: "3.7"
+services:
+
+  hana:
+    container_name: jsql-hana
+    image: saplabs/hanaexpress
+    ports:
+      - "39017:39017"
+    command:
+      - --master-password
+      - 1anaHEXH
+      - --agree-to-sap-license
+    networks:
+      - jsql-network
+
+networks:
+  jsql-network:

@@ -1,0 +1,65 @@
+package spring.tenant.jpa;
+
+import jakarta.persistence.EntityManagerFactory;
+import org.hibernate.cfg.JdbcSettings;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.jdbc.DataSourceBuilder;
+import org.springframework.boot.jpa.EntityManagerFactoryBuilder;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.jdbc.datasource.lookup.AbstractRoutingDataSource;
+import org.springframework.orm.jpa.JpaTransactionManager;
+import org.springframework.orm.jpa.JpaVendorAdapter;
+import org.springframework.orm.jpa.persistenceunit.PersistenceUnitManager;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.EnableTransactionManagement;
+import spring.SpringApp;
+
+import javax.sql.DataSource;
+import java.sql.DriverManager;
+import java.util.*;
+
+@Configuration
+@EnableTransactionManagement
+public class JpaConfiguration {
+
+    @Bean
+    public PlatformTransactionManager transactionManager(EntityManagerFactory emf) {
+        return new JpaTransactionManager(emf);
+    }
+
+    @Bean
+    public EntityManagerFactoryBuilder entityManagerFactoryBuilder(
+        JpaVendorAdapter jpaVendorAdapter,
+        ObjectProvider<PersistenceUnitManager> persistenceUnitManager
+    ) {  // init entity, required for h2
+        return new EntityManagerFactoryBuilder(
+            jpaVendorAdapter,
+            f -> Map.of(),
+            persistenceUnitManager.getIfAvailable()
+        );
+    }
+
+    @Bean
+    public DataSource dataSource() {  // unused when hibernate tenant active
+        Map<Object, Object> resolvedDataSources = new HashMap<>();
+
+        DriverManager.setLogWriter(null);  // remove annoying logs from jdbc driver
+        SpringApp.getPropertiesFilterByProfile().forEach(props -> {
+            DataSource dataSource = DataSourceBuilder.create()
+                .url(props.getProperty(JdbcSettings.JAKARTA_JDBC_URL))
+                .username(props.getProperty(JdbcSettings.JAKARTA_JDBC_USER))
+                .password(props.getProperty(JdbcSettings.JAKARTA_JDBC_PASSWORD))
+                .driverClassName(props.getProperty(JdbcSettings.JAKARTA_JDBC_DRIVER))
+            .build();
+            resolvedDataSources.put(props.getProperty(SpringApp.TENANT), dataSource);
+        });
+
+        AbstractRoutingDataSource dataSource = new MultitenantDataSource();
+        dataSource.setDefaultTargetDataSource(resolvedDataSources.get(SpringApp.TENANT_H2));
+        dataSource.setTargetDataSources(resolvedDataSources);
+
+        dataSource.afterPropertiesSet();
+        return dataSource;
+    }
+}

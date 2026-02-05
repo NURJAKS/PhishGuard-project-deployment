@@ -1,0 +1,325 @@
+package com.jsql.view.swing.menubar;
+
+import com.formdev.flatlaf.intellijthemes.FlatDarkFlatIJTheme;
+import com.formdev.flatlaf.intellijthemes.FlatHighContrastIJTheme;
+import com.formdev.flatlaf.intellijthemes.FlatLightFlatIJTheme;
+import com.formdev.flatlaf.intellijthemes.materialthemeuilite.FlatMTGitHubDarkIJTheme;
+import com.formdev.flatlaf.intellijthemes.materialthemeuilite.FlatMTGitHubIJTheme;
+import com.formdev.flatlaf.themes.FlatMacDarkLaf;
+import com.formdev.flatlaf.themes.FlatMacLightLaf;
+import com.jsql.util.I18nUtil;
+import com.jsql.util.PreferencesUtil;
+import com.jsql.view.swing.action.ActionNewWindow;
+import com.jsql.view.swing.dialog.translate.Language;
+import com.jsql.view.swing.panel.PanelPreferences;
+import com.jsql.view.swing.sql.SqlEngine;
+import com.jsql.view.swing.tab.TabHeader;
+import com.jsql.view.swing.util.I18nViewUtil;
+import com.jsql.view.swing.util.MediatorHelper;
+import com.jsql.view.swing.util.RadioItemNonClosing;
+import com.jsql.view.swing.util.UiUtil;
+import org.apache.logging.log4j.util.Strings;
+
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
+import java.awt.event.MouseEvent;
+import java.util.AbstractMap;
+import java.util.Arrays;
+import java.util.Locale;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+
+public class MenuWindows extends JMenu {
+
+    private static final String I18N_SQL_ENGINE = "MENUBAR_SQL_ENGINE";
+    private static final String I18N_PREFERENCES = "MENUBAR_PREFERENCES";
+
+    public static final String ACTION_STARTING_APP = "init";
+    public static final String MENU_WINDOWS = "menuWindows";
+    public static final String MENU_TRANSLATION = "menuTranslation";
+    public static final String ITEM_RUSSIAN = "itemRussian";
+    public static final String ITEM_ENGLISH = "itemEnglish";
+
+    private final AppMenubar appMenubar;
+
+    private final JMenu menuView;
+
+    public MenuWindows(AppMenubar appMenubar) {
+        super(I18nUtil.valueByKey("MENUBAR_WINDOWS"));
+        this.appMenubar = appMenubar;
+
+        this.setName(MenuWindows.MENU_WINDOWS);
+        I18nViewUtil.addComponentForKey("MENUBAR_WINDOWS", this);
+        this.setMnemonic('W');
+
+        JMenuItem itemNewWindows = new JMenuItem(new ActionNewWindow());
+        I18nViewUtil.addComponentForKey("NEW_WINDOW_MENU", itemNewWindows);
+
+        this.add(itemNewWindows);
+        var menuAppearance = new JMenu(I18nUtil.valueByKey("MENUBAR_APPEARANCE"));
+        I18nViewUtil.addComponentForKey("MENUBAR_APPEARANCE", menuAppearance);
+        menuAppearance.setMnemonic('A');
+
+        JMenuItem itemNewWindows4k = new JMenuItem(
+            new ActionNewWindow("Open window in 4K resolution...", "-Dsun.java2d.uiScale=2.5")
+        );
+        menuAppearance.add(itemNewWindows4k);
+
+        var groupRadio = new ButtonGroup();
+        var menuThemes = new JMenu(I18nUtil.valueByKey("MENUBAR_THEMES"));
+        I18nViewUtil.addComponentForKey("MENUBAR_THEMES", menuAppearance);
+        menuThemes.setMnemonic('T');
+
+        Arrays.asList(
+            new AbstractMap.SimpleEntry<>(FlatLightFlatIJTheme.class.getName(), "IntelliJ"),
+            new AbstractMap.SimpleEntry<>(FlatDarkFlatIJTheme.class.getName(), "IntelliJ Dark"),
+            new AbstractMap.SimpleEntry<>(FlatMacLightLaf.class.getName(), "macOS"),
+            new AbstractMap.SimpleEntry<>(FlatMacDarkLaf.class.getName(), "macOS Dark"),
+            new AbstractMap.SimpleEntry<>(FlatMTGitHubIJTheme.class.getName(), "GitHub"),
+            new AbstractMap.SimpleEntry<>(FlatMTGitHubDarkIJTheme.class.getName(), "GitHub Dark"),
+            new AbstractMap.SimpleEntry<>(FlatHighContrastIJTheme.class.getName(), "High contrast")
+        ).forEach(entry -> {
+            JMenuItem item = new RadioItemNonClosing(
+                new AbstractAction() {
+                    @Override
+                    public void actionPerformed(ActionEvent e) {
+                        AppMenubar.applyTheme(entry.getKey());
+                    }
+                }
+            );
+            item.setText(entry.getValue());
+            item.setSelected(entry.getKey().equals(MediatorHelper.model().getMediatorUtils().preferencesUtil().getThemeFlatLafName()));
+            groupRadio.add(item);
+            menuThemes.add(item);
+        });
+
+        this.add(itemNewWindows);
+        this.add(menuAppearance);
+        this.add(menuThemes);
+        this.add(new JSeparator());
+        this.add(this.initMenuTranslation());
+        this.add(new JSeparator());
+
+        this.menuView = new JMenu(I18nUtil.valueByKey("MENUBAR_VIEW"));
+        I18nViewUtil.addComponentForKey("MENUBAR_VIEW", this.menuView);
+        this.menuView.setMnemonic('V');
+
+        AtomicInteger accelerator = new AtomicInteger(0x31);
+        AtomicInteger tabPosition = new AtomicInteger();
+        MediatorHelper.frame().getTabManagers().getIconsTabs().forEach(entry -> {
+            var menuItem = new JMenuItem(I18nUtil.valueByKey(entry.getKeyLabel()), entry.getIcon());
+            I18nViewUtil.addComponentForKey(entry.getKeyLabel(), menuItem);
+            menuItem.setName(entry.getKeyLabel());  // required by card manager switch
+            this.menuView.add(menuItem);
+
+            menuItem.setAccelerator(KeyStroke.getKeyStroke(
+                KeyEvent.getExtendedKeyCodeForChar(accelerator.getAndIncrement()),
+                InputEvent.CTRL_DOWN_MASK
+            ));
+
+            final var position = tabPosition.get();  // required by closure
+            menuItem.addActionListener(actionEvent -> {  // setAction() could set action+text+icon but i18n not easy
+                CardLayout cardLayout = (CardLayout) MediatorHelper.tabManagersCards().getLayout();
+                cardLayout.show(MediatorHelper.tabManagersCards(), menuItem.getName());
+                MediatorHelper.frame().getTabManagers().setSelectedIndex(position);
+            });
+            tabPosition.getAndIncrement();
+        });
+
+        this.add(this.menuView);
+
+        var menuPanel = new JMenu(I18nUtil.valueByKey("MENUBAR_PANEL"));
+        I18nViewUtil.addComponentForKey("MENUBAR_PANEL", menuPanel);
+        menuPanel.setMnemonic('C');
+
+        Arrays.asList(
+            new ModelCheckboxMenu(
+                "CONSOLE_CHUNK_LABEL",
+                PreferencesUtil.CHUNK_VISIBLE,
+                () -> MediatorHelper.panelConsoles().insertChunkTab(),
+                UiUtil.CHUNK.getIcon()
+            ),
+            new ModelCheckboxMenu(
+                "CONSOLE_BINARY_LABEL",
+                PreferencesUtil.BINARY_VISIBLE,
+                () -> MediatorHelper.panelConsoles().insertBooleanTab(),
+                UiUtil.BINARY.getIcon()
+            ),
+            new ModelCheckboxMenu(
+                "CONSOLE_NETWORK_LABEL",
+                PreferencesUtil.NETWORK_VISIBLE,
+                () -> MediatorHelper.panelConsoles().insertNetworkTab(),
+                UiUtil.NETWORK.getIcon()
+            ),
+            new ModelCheckboxMenu(
+                "CONSOLE_JAVA_LABEL",
+                PreferencesUtil.JAVA_VISIBLE,
+                () -> MediatorHelper.panelConsoles().insertJavaTab(),
+                UiUtil.CUP.getIcon(),
+                false
+            )
+        ).forEach(model -> {
+            var menuItem = new JCheckBoxMenuItem(
+                I18nUtil.valueByKey(model.i18n),
+                model.icon,
+                model.isChecked
+            ) {
+                @Override
+                protected void processMouseEvent(MouseEvent e) {
+                    if (RadioItemNonClosing.shouldClose(e, this)) {
+                        super.processMouseEvent(e);
+                    }
+                }
+            };
+            I18nViewUtil.addComponentForKey(model.i18n, menuItem);
+            menuPanel.add(menuItem);
+
+            menuItem.addActionListener(actionEvent -> {
+                if (menuItem.isSelected()) {
+                    model.runnableInsertTab.run();
+                } else {
+                    MediatorHelper.tabConsoles().remove(MediatorHelper.tabConsoles().indexOfTab(model.icon));
+                }
+            });
+        });
+
+        this.add(menuPanel);
+        this.add(new JSeparator());
+        this.add(this.getMenuItemSqlEngine());
+        this.add(this.getMenuItemPreferences());
+    }
+
+    private JMenuItem getMenuItemSqlEngine() {
+        var itemSqlEngine = new JMenuItem(I18nUtil.valueByKey(MenuWindows.I18N_SQL_ENGINE));
+        I18nViewUtil.addComponentForKey(MenuWindows.I18N_SQL_ENGINE, itemSqlEngine);
+        itemSqlEngine.setName("itemSqlEngine");
+        itemSqlEngine.setMnemonic('S');
+
+        itemSqlEngine.addActionListener(actionEvent -> {
+            var titleTabSqlEngine = "SQL Engine";
+            for (var i = 0 ; i < MediatorHelper.tabResults().getTabCount() ; i++) {
+                if (titleTabSqlEngine.equals(MediatorHelper.tabResults().getTitleAt(i))) {
+                    MediatorHelper.tabResults().setSelectedIndex(i);
+                    return;
+                }
+            }
+
+            MediatorHelper.frame().getSplitNS().initSplitOrientation();
+
+            var panelSqlEngine = new SqlEngine();
+            MediatorHelper.tabResults().addTab(titleTabSqlEngine, panelSqlEngine);
+            MediatorHelper.tabResults().setSelectedComponent(panelSqlEngine);  // Focus on the new tab
+
+            // Create a custom tab header
+            var header = new TabHeader(I18nViewUtil.valueByKey(MenuWindows.I18N_SQL_ENGINE), UiUtil.COG.getIcon());
+            I18nViewUtil.addComponentForKey(MenuWindows.I18N_SQL_ENGINE, header.getTabLabel());
+
+            // Apply the custom header to the tab
+            MediatorHelper.tabResults().setTabComponentAt(MediatorHelper.tabResults().indexOfComponent(panelSqlEngine), header);
+            MediatorHelper.tabResults().updateUI();  // required: light, open/close prefs, dark => light artifacts
+        });
+
+        return itemSqlEngine;
+    }
+
+    private JMenuItem getMenuItemPreferences() {
+        JMenuItem itemPreferences = new JMenuItem(I18nUtil.valueByKey(MenuWindows.I18N_PREFERENCES), 'P');
+        I18nViewUtil.addComponentForKey(MenuWindows.I18N_PREFERENCES, itemPreferences);
+        itemPreferences.setName("itemPreferences");
+
+        // Render the Preferences dialog behind the scene
+        var titleTabPreferences = "Preferences";
+
+        itemPreferences.addActionListener(actionEvent -> {
+            for (var i = 0 ; i < MediatorHelper.tabResults().getTabCount() ; i++) {
+                if (titleTabPreferences.equals(MediatorHelper.tabResults().getTitleAt(i))) {
+                    MediatorHelper.tabResults().setSelectedIndex(i);
+                    return;
+                }
+            }
+
+            MediatorHelper.frame().getSplitNS().initSplitOrientation();
+
+            var panelPreferences = new PanelPreferences();
+            MediatorHelper.tabResults().addTab(titleTabPreferences, panelPreferences);
+            MediatorHelper.tabResults().setSelectedComponent(panelPreferences);  // Focus on the new tab
+
+            // Create a custom tab header
+            var header = new TabHeader(I18nViewUtil.valueByKey(MenuWindows.I18N_PREFERENCES), UiUtil.COG.getIcon());
+            I18nViewUtil.addComponentForKey(MenuWindows.I18N_PREFERENCES, header.getTabLabel());
+
+            // Apply the custom header to the tab
+            MediatorHelper.tabResults().setTabComponentAt(MediatorHelper.tabResults().indexOfComponent(panelPreferences), header);
+
+            MediatorHelper.tabResults().updateUI();  // required: light, open/close prefs, dark => light artifacts
+        });
+
+        return itemPreferences;
+    }
+
+    private JMenu initMenuTranslation() {
+        var menuTranslation = new JMenu(I18nUtil.valueByKey("MENUBAR_LANGUAGE"));
+        I18nViewUtil.addComponentForKey("MENUBAR_LANGUAGE", menuTranslation);
+        menuTranslation.setName(MenuWindows.MENU_TRANSLATION);
+        menuTranslation.setMnemonic('L');
+
+        var groupRadioLanguage = new ButtonGroup();
+        var atomicIsAnySelected = new AtomicBoolean(false);
+        AppMenubar.ITEMS_TRANSLATE.forEach(model -> {
+            atomicIsAnySelected.set(atomicIsAnySelected.get() || model.getLanguage().isCurrentLanguage());
+            model.setMenuItem(new RadioItemNonClosing(
+                model.getLanguage().getMenuItemLabel(),
+                model.getLanguage().getFlag(),
+                model.getLanguage().isCurrentLanguage()
+            ));
+            model.getMenuItem().addActionListener(actionEvent -> {
+                var newLocale = model.getLanguage() == Language.EN
+                    ? Locale.ROOT  // required as no bundle 'en'
+                    : Locale.forLanguageTag(model.getLanguage().getLanguageTag());
+                this.appMenubar.switchLocale(newLocale);
+                if (!MenuWindows.ACTION_STARTING_APP.equals(model.getMenuItem().getActionCommand())) {
+                    MediatorHelper.model().getPropertiesUtil().displayI18nStatus(newLocale);
+                }
+                model.getMenuItem().setActionCommand(Strings.EMPTY);
+                MediatorHelper.model().getMediatorUtils().preferencesUtil().withLanguageTag(model.getLanguage().getLanguageTag()).persist();
+            });
+            menuTranslation.add(model.getMenuItem());
+            groupRadioLanguage.add(model.getMenuItem());
+        });
+
+        AppMenubar.ITEMS_TRANSLATE.stream()
+        .filter(model -> model.getLanguage() == Language.EN)
+        .forEach(modelItem -> {
+            modelItem.getMenuItem().setSelected(!atomicIsAnySelected.get());
+            modelItem.getMenuItem().setName(MenuWindows.ITEM_ENGLISH);
+        });
+        AppMenubar.ITEMS_TRANSLATE.stream()
+        .filter(model -> model.getLanguage() == Language.RU)
+        .forEach(modelItem -> modelItem.getMenuItem().setName(MenuWindows.ITEM_RUSSIAN));
+        AppMenubar.ITEMS_TRANSLATE.stream()
+        .filter(model -> model.getLanguage() == Language.AR)
+        .forEach(modelItem -> modelItem.getMenuItem().setComponentOrientation(ComponentOrientation.RIGHT_TO_LEFT));
+
+        return menuTranslation;
+    }
+
+    public void switchLocaleFromPreferences() {
+        AppMenubar.ITEMS_TRANSLATE.stream().filter(model -> model.getLanguage().getLanguageTag().equals(
+            MediatorHelper.model().getMediatorUtils().preferencesUtil().getLanguageTag()
+        ))
+        .forEach(modelItem -> {
+            modelItem.getMenuItem().setActionCommand(MenuWindows.ACTION_STARTING_APP);
+            modelItem.getMenuItem().doClick();
+        });
+    }
+
+
+    // Getter and setter
+
+    public JMenu getMenuView() {
+        return this.menuView;
+    }
+}

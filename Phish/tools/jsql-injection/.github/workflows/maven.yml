@@ -1,0 +1,53 @@
+on:
+  push:
+    branches: [ master ]
+    
+env:
+  MAVEN_BYTEBUDDY: ""
+  DOCKER_RESOURCES: ./model/src/test/resources/docker
+
+jobs:
+
+  set-global-env-var:
+    runs-on: ubuntu-latest
+    steps:
+      - id: set-vars
+        env:
+          DOCKER_RESOURCES: ${{ env.DOCKER_RESOURCES }}
+        run: echo "DOCKER_RESOURCES=${DOCKER_RESOURCES}" >> $GITHUB_OUTPUT
+    outputs:
+      DOCKER_RESOURCES: ${{ steps.set-vars.outputs.DOCKER_RESOURCES }}
+
+  virustotal:
+    needs: set-global-env-var
+    uses: ./.github/workflows/virustotal.yml  # required in top folder, else composite
+    with:
+      DOCKER_RESOURCES: ${{ needs.set-global-env-var.outputs.DOCKER_RESOURCES }}
+    secrets: inherit
+
+  build-engine:
+    needs: set-global-env-var
+    uses: ./.github/workflows/build-engine.yml
+    strategy:
+      fail-fast: false
+      matrix:
+        # must match java classes
+        engine: [Altibase, Clickhouse, Db2, Exasol, Hana, Mimer, Monetdb, Oracle, Presto, Sqlserver, Sybase, Vertica, Virtuoso]
+    with:
+      DOCKER_RESOURCES: ${{ needs.set-global-env-var.outputs.DOCKER_RESOURCES }}
+      NAME_ENGINE: ${{ matrix.engine }}
+
+  build-main:
+    needs: set-global-env-var
+    uses: ./.github/workflows/build-main.yml
+    with:
+      DOCKER_RESOURCES: ${{ needs.set-global-env-var.outputs.DOCKER_RESOURCES }}
+    secrets: inherit
+
+  codeql:
+    uses: ./.github/workflows/codeql.yml  # required in top folder, else composite
+
+  release:
+    needs: [virustotal, build-main, build-engine, codeql]
+    uses: ./.github/workflows/release.yml
+    secrets: inherit

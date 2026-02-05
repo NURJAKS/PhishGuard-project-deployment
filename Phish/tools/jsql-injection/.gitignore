@@ -1,0 +1,21 @@
+# project configuration
+.settings/
+target/
+.groovy
+
+# code quality plugin properties
+test-output/
+.codepro/
+.sonar/
+dependency-reduced-pom.xml
+build.xml
+jsql-sqlite-its.db
+derby.log
+.idea/
+*.iml
+.run/
+.flattened-pom.xml
+pom.xml.versionsBackup
+model/src/test/resources/jdbc/
+model/data
+data/
