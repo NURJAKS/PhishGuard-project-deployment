@@ -1,14 +1,8 @@
-# -------- Unified .gitignore for PhishGuard (Python, Node.js, Docker, AI, Chrome Extension) -------- #
-
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
-.Python
-*.egg-info/
-dist/
-build/
 .venv/
 venv/
 ENV/
@@ -17,214 +11,45 @@ env/
 .env.*
 *.sqlite3
 *.db
-*.pkl
-*.pt
-*.h5
-*.pth
-*.pyo
-*.pyd
-.ipynb_checkpoints/
-*.pyc
-*.pyo
-*.pyd
-.Python
-build/
-develop-eggs/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
 
-# Database
-**/database/*.db
-**/database/*.sqlite*
-*.db-journal
-*.db-wal
-*.db-shm
-
-# Node.js / npm / JS / Chrome extension
+# Node.js
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
-package-lock.json
-yarn.lock
-pnpm-lock.yaml
-.pnp/
-.pnp.js
 frontend/dist/
 extension/dist/
-extension/*.zip
-extension/*.crx
-extension/*.pem
-*.tsbuildinfo
+
+# OS / Editor
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*~
 
 # Logs
 *.log
 logs/
-backend/*.log
-dashboard/*.log
-dashb*/*.log
-*.log.*
 
-# Docker
-.dockerignore
-docker-compose.yml
-docker-compose.override.yml
-*.pid
-*.sock
-*.tmp
-*.bak
-.docker/
-
-# AWS / Lambda / Amplify
-.aws-sam/
-samconfig.toml
-amplify/cli.json
-amplify/.config/
-amplify/backend/amplify-meta.json
-.amplify
-amplify_outputs*
-amplifyconfiguration*
-check*
-
-# IDE / Editor
-.vscode/
-.idea/
-*.sw?
-*~
-.DS_Store
-Thumbs.db
-.suo
-.ntvs*
-.njsproj
-.sln
-*.sublime-project
-*.sublime-workspace
-*.code-workspace
-
-# OS / System junk
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Desktop.ini
-$RECYCLE.BIN/
-.directory
-
-# Temporary
+# Build and Temp
 /tmp/
 tmp/
 temp/
 *.tmp
 *.temp
-*.cache
 .cache/
-
-# Config (potentially sensitive or local)
-auto_scan_config.json
-**/config/local.*
-**/config/production.*
-*.local
-*.local.*
-secrets.json
-credentials.json
-
-# Archives
-*.zip
-*.tar.gz
-*.rar
-*.7z
-*.gz
-*.bz2
-*.deb
-
-# Model files and checkpoints
-*.pt
-*.h5
-*.pth
-*.pkl
-*.ckpt
-*.safetensors
-
-# Miscellaneous
 coverage/
 *.coverage
-htmlcov/
-.envrc
-.tox/
-.pytest_cache/
-.mypy_cache/
-.dmypy.json
-dmypy.json
-.hypothesis/
-*.cover
-.hypothesis/
-.pytest_cache/
-.coverage
-.coverage.*
-coverage.xml
-*.cover
-*.mo
-*.pot
 
-# Uploads and user data
-uploads/
-**/uploads/*
-**/static/uploads/*
-test_invoice.pdf
-example_invoice.*
-
-# Tools binaries (keep source, ignore compiled)
-tools/**/*.o
-tools/**/*.a
-tools/**/bin/
-tools/**/build/
+# PhishGuard specific
 tools/**/tmp/
-tools/masscan/tmp/
-tools/gobuster/tmp/
-
-# Pinkerton
 Pinkerton/__pycache__/
 Pinkerton/*.pyc
-
-# PhishGuardAI (AWS Lambda)
-PhishGuardAI/.aws-sam/
-PhishGuardAI/node_modules/
-PhishGuardAI/dist/
-
-# PhishGuardCSharp
-PhishGuardCSharp/bin/
-PhishGuardCSharp/obj/
-PhishGuardCSharp/.vs/
-PhishGuardCSharp/*.user
-PhishGuardCSharp/*.suo
-
-# Masscan source (if cloned)
 masscan/bin/
 masscan/tmp/
 masscan/*.o
 masscan/*.a
-
-# Test files
-test_*.py
-*_test.py
-tests/__pycache__/
-
-# Documentation builds
-docs/_build/
-docs/.doctrees/
-
-# -------- END UNIFIED .gitignore -------- #
-
+uploads/
+**/uploads/*
