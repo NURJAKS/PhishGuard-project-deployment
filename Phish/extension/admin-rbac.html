@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PhishGuard – Управление ролями и правами</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --public-color: #3b82f6;
+            --business-color: #10b981;
+            --government-color: #1e3a8a;
+            --bg-dark: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border: rgba(255, 255, 255, 0.1);
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+            color: var(--text-main);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 30px 20px;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 40px;
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 700;
+            margin: 0;
+            background: linear-gradient(to right, #60a5fa, #a78bfa);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .tabs-header {
+            display: flex;
+            gap: 10px;
+            background: rgba(15, 23, 42, 0.5);
+            padding: 6px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            margin-bottom: 25px;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 12px;
+            border-radius: 8px;
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .tab-btn.active.tab-public {
+            background: var(--public-color);
+            color: white;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+
+        .tab-btn.active.tab-business {
+            background: var(--business-color);
+            color: white;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+
+        .tab-btn.active.tab-government {
+            background: var(--government-color);
+            color: white;
+            box-shadow: 0 4px 12px rgba(30, 58, 138, 0.3);
+        }
+
+        .tab-btn.active.tab-settings {
+            background: #64748b;
+            color: white;
+        }
+
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+        }
+
+        .table-responsive {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 8px;
+        }
+
+        th {
+            text-align: left;
+            padding: 12px 16px;
+            color: var(--text-muted);
+            font-weight: 500;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        td {
+            padding: 16px;
+            background: rgba(15, 23, 42, 0.3);
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+        }
+
+        td:first-child {
+            border-left: 1px solid var(--border);
+            border-top-left-radius: 12px;
+            border-bottom-left-radius: 12px;
+        }
+
+        td:last-child {
+            border-right: 1px solid var(--border);
+            border-top-right-radius: 12px;
+            border-bottom-right-radius: 12px;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: #334155;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+            color: #94a3b8;
+        }
+
+        .badge {
+            padding: 4px 10px;
+            border-radius: 9999px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .badge-sector-public {
+            background: rgba(59, 130, 246, 0.1);
+            color: #60a5fa;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+
+        .badge-sector-business {
+            background: rgba(16, 185, 129, 0.1);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .badge-sector-government {
+            background: rgba(30, 58, 138, 0.2);
+            color: #93c5fd;
+            border: 1px solid rgba(30, 58, 138, 0.5);
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: none;
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2563eb;
+            transform: translateY(-1px);
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-main);
+        }
+
+        .btn-outline:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .btn-danger {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .btn-danger:hover {
+            background: #ef4444;
+            color: white;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .card-footer {
+            margin-top: 24px;
+            display: flex;
+            gap: 12px;
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(4px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal {
+            background: #1e293b;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            width: 100%;
+            max-width: 450px;
+            padding: 30px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal h2 {
+            margin-top: 0;
+            font-size: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        .form-control {
+            width: 100%;
+            background: #0f172a;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 12px;
+            color: white;
+            font-family: inherit;
+        }
+
+        .perms-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .perm-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(15, 23, 42, 0.3);
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 13px;
+        }
+
+        .perm-item input {
+            width: 16px;
+            height: 16px;
+            accent-color: var(--public-color);
+        }
+
+        /* Icons placeholder */
+        .icon {
+            width: 16px;
+            height: 16px;
+            fill: currentColor;
+        }
+
+        .tooltip {
+            position: relative;
+        }
+
+        .tooltip:hover::after {
+            content: attr(data-tip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #334155;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            white-space: nowrap;
+            margin-bottom: 5px;
+            z-index: 10;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <div>
+                <h1>Управление ролями и правами</h1>
+                <p style="color: var(--text-muted); font-size: 14px; margin-top: 4px;">Система разграничения доступа
+                    PhishGuard</p>
+            </div>
+            <div class="user-info">
+                <span id="admin-name" style="font-weight: 500;">Admin</span>
+                <div class="user-avatar">AD</div>
+            </div>
+        </header>
+
+        <div class="tabs-header">
+            <button class="tab-btn active tab-public" onclick="switchTab('Public')">
+                <span>🫂</span> Народ
+            </button>
+            <button class="tab-btn tab-business" onclick="switchTab('Business')">
+                <span>💼</span> Бизнес
+            </button>
+            <button class="tab-btn tab-government" onclick="switchTab('Government')">
+                <span>🏛️</span> Государство
+            </button>
+            <button class="tab-btn" onclick="switchTab('Settings')">
+                <span>⚙️</span> Роли и права
+            </button>
+            <button class="tab-btn" onclick="switchTab('Mass')">
+                <span>📦</span> Массовое
+            </button>
+        </div>
+
+        <!-- Section: Users Table -->
+        <div id="section-users" class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 id="sector-title" style="margin: 0;">Сектор: Народ</h3>
+                <div class="btn-group">
+                    <button class="btn btn-outline" onclick="loadUsers()">🔄 Обновить</button>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Пользователь</th>
+                            <th>Сектор</th>
+                            <th>Роль</th>
+                            <th>Права</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody id="user-table-body">
+                        <!-- Users dynamic load -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card-footer">
+                <button class="btn btn-primary" onclick="openModal('add-user')">➕ Добавить пользователя</button>
+                <button class="btn btn-outline" onclick="switchTab('Mass')">📦 Массовое назначение</button>
+            </div>
+        </div>
+
+        <!-- Section: Roles and Permissions -->
+        <div id="section-settings" class="card" style="display: none;">
+            <h3>Настройка ролей и разрешений</h3>
+            <div class="form-group">
+                <label>Выберите роль для редактирования</label>
+                <select class="form-control" id="role-select" onchange="loadRolePermissions()">
+                    <option value="1">Public</option>
+                    <option value="2">Business</option>
+                    <option value="3">Government</option>
+                </select>
+            </div>
+
+            <div class="perms-grid" id="permissions-grid">
+                <!-- Permissions checkboxes load here -->
+            </div>
+
+            <div class="card-footer">
+                <button class="btn btn-primary" onclick="saveRolePermissions()">💾 Сохранить изменения</button>
+            </div>
+        </div>
+
+        <!-- Section: Mass Management -->
+        <div id="section-mass" class="card" style="display: none;">
+            <h3>Массовое управление пользователями</h3>
+            <p class="text-muted" style="font-size: 14px;">Выберите сектор и действие для применения к нескольким
+                аккаунтам.</p>
+
+            <div class="form-group">
+                <label>Сектор</label>
+                <select class="form-control" id="mass-sector">
+                    <option value="Public">Народ</option>
+                    <option value="Business">Бизнес</option>
+                    <option value="Government">Государство</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Новая роль (назначить всем)</label>
+                <select class="form-control" id="mass-role">
+                    <!-- Dynamic roles -->
+                </select>
+            </div>
+
+            <div class="card-footer">
+                <button class="btn btn-primary" onclick="applyMassChanges()">🚀 Применить изменения</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="modal-role-confirm" class="modal-overlay">
+        <div class="modal">
+            <h2 id="modal-title">Подтверждение роли</h2>
+            <div id="modal-content">
+                <!-- Dynamic modal content -->
+            </div>
+            <div class="card-footer" style="justify-content: flex-end;">
+                <button class="btn btn-outline" onclick="closeModal()">Отмена</button>
+                <button class="btn btn-primary" id="modal-confirm-btn">Подтвердить</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="admin-rbac.js"></script>
+</body>
+
+</html>

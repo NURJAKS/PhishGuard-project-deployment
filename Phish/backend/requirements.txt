@@ -13,8 +13,9 @@ mammoth==1.6.0
 openpyxl==3.1.2
 xlrd==2.0.1
 
-# Document Authenticity Check (anti-fraud, not antivirus)
-pillow==10.4.0
-olefile==0.47
-signxml==3.2.2
+# Database and Cache
+redis==5.0.1
+psycopg2-binary==2.9.9
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
 
