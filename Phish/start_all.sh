@@ -49,7 +49,6 @@ fi
 
 # Запуск Backend
 echo -e "${GREEN}Запуск Backend API (порт 8002)...${NC}"
-export GOOGLE_API_KEY="AIzaSyDG0MRhz6A84J2n_QVhgQ-ArgeyXXwk2os"
 cd backend
 nohup "$PYTHON_BIN" -m uvicorn main:app --host 0.0.0.0 --port 8002 > ../logs/backend.log 2>&1 &
 BACKEND_PID=$!

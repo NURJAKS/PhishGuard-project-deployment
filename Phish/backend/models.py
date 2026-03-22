@@ -30,6 +30,17 @@ class Permission(Base):
     
     roles = relationship("Role", secondary=role_permissions, back_populates="permissions")
 
+class Plan(Base):
+    __tablename__ = "plans"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True, nullable=False) # Free, Pro, Business, Gov
+    daily_limit = Column(Integer, default=20)
+    has_ai = Column(Integer, default=0) # 0 false, 1 true
+    has_api = Column(Integer, default=0)
+    has_bulk = Column(Integer, default=0)
+    
+    users = relationship("User", back_populates="plan")
+
 class User(Base):
     __tablename__ = "users"
     
@@ -38,13 +49,17 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=True)
     hashed_password = Column(String, nullable=False)
     role_id = Column(Integer, ForeignKey("roles.id"))
+    plan_id = Column(Integer, ForeignKey("plans.id"))
     sector = Column(String, default="Public", nullable=False) # Public, Business, Government
     status = Column(String, default="active", nullable=False) # active, pending, restricted
     is_verified = Column(Integer, default=0) # 0 for false, 1 for true
     is_active = Column(Integer, default=1)
+    daily_scans_count = Column(Integer, default=0)
+    last_scan_date = Column(DateTime, default=func.now())
     created_at = Column(DateTime, default=func.now())
 
     user_role = relationship("Role", back_populates="users")
+    plan = relationship("Plan", back_populates="users")
     incidents = relationship("Incident", back_populates="owner")
 
 class Incident(Base):

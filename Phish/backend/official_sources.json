@@ -1,45 +1,70 @@
 {
   "banks": {
     "halyk": {
-      "official_domains": ["halykbank.kz", "www.halykbank.kz", "halykbank.com"],
+      "official_domains": [
+        "halykbank.kz",
+        "www.halykbank.kz",
+        "halykbank.com"
+      ],
       "official_name": "Halyk Bank",
       "country": "KZ"
     },
     "kaspi": {
-      "official_domains": ["kaspi.kz", "www.kaspi.kz"],
+      "official_domains": [
+        "kaspi.kz",
+        "www.kaspi.kz"
+      ],
       "official_name": "Kaspi Bank",
       "country": "KZ"
     },
     "sberbank": {
-      "official_domains": ["sberbank.ru", "www.sberbank.ru", "sberbank.kz"],
+      "official_domains": [
+        "sberbank.ru",
+        "www.sberbank.ru",
+        "sberbank.kz"
+      ],
       "official_name": "Sberbank",
       "country": "RU/KZ"
     },
     "homecredit": {
-      "official_domains": ["homecredit.kz", "www.homecredit.kz"],
+      "official_domains": [
+        "homecredit.kz",
+        "www.homecredit.kz"
+      ],
       "official_name": "Home Credit Bank",
       "country": "KZ"
     }
   },
   "payment_systems": {
     "stripe": {
-      "official_domains": ["stripe.com", "checkout.stripe.com"],
+      "official_domains": [
+        "stripe.com",
+        "checkout.stripe.com"
+      ],
       "official_name": "Stripe"
     },
     "paypal": {
-      "official_domains": ["paypal.com", "www.paypal.com"],
+      "official_domains": [
+        "paypal.com",
+        "www.paypal.com"
+      ],
       "official_name": "PayPal"
     }
   },
   "tech_companies": {
     "google": {
-      "official_domains": ["google.com", "accounts.google.com"],
+      "official_domains": [
+        "google.com",
+        "accounts.google.com"
+      ],
       "official_name": "Google"
     },
     "microsoft": {
-      "official_domains": ["microsoft.com", "account.microsoft.com"],
+      "official_domains": [
+        "microsoft.com",
+        "account.microsoft.com"
+      ],
       "official_name": "Microsoft"
     }
   }
 }
-

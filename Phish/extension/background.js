@@ -1,6 +1,12 @@
 // PhishGuard Background Service Worker
 console.log('PhishGuard background service worker loaded');
 
+// Helper to get auth token
+async function getAuthToken() {
+  const stored = await chrome.storage.local.get(['auth_token']);
+  return stored.auth_token || null;
+}
+
 // Конфигурация
 const API_BASE_CANDIDATES = [
   'http://127.0.0.1:8002',
@@ -9,11 +15,15 @@ const API_BASE_CANDIDATES = [
 let RESOLVED_API_BASE = null;
 async function resolveApiBase() {
   if (RESOLVED_API_BASE) return RESOLVED_API_BASE;
+  const token = await getAuthToken();
   for (const base of API_BASE_CANDIDATES) {
     try {
       const controller = new AbortController();
       const t = setTimeout(() => controller.abort(), 1000);
-      await fetch(`${base}/health`, { signal: controller.signal });
+      await fetch(`${base}/health`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        signal: controller.signal
+      });
       clearTimeout(t);
       RESOLVED_API_BASE = base;
       return base;
@@ -265,14 +275,21 @@ async function checkUrl(url, forceRefresh = false) {
         const controller = new AbortController();
         // Увеличиваем таймаут до 5 секунд, так как локальный сервер может отвечать не сразу
         const t = setTimeout(() => controller.abort(), 5000);
+        const token = await getAuthToken();
         const resp = await fetch(`${base}/v1/check/url`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': token ? `Bearer ${token}` : ''
+          },
           body: JSON.stringify({ url }),
           signal: controller.signal
         });
         clearTimeout(t);
         if (!resp.ok) {
+          if (resp.status === 401) {
+            return { action: 'allow', score: 0, reason: 'Требуется вход', error: 'UNAUTHORIZED_401' };
+          }
           lastError = `HTTP ${resp.status}`;
           continue;
         }
@@ -314,7 +331,11 @@ async function isAutoScanEnabled() {
       try {
         const controller = new AbortController();
         const t = setTimeout(() => controller.abort(), 1000);
-        const resp = await fetch(`${base}/admin/auto-scan`, { signal: controller.signal });
+        const token = await getAuthToken();
+        const resp = await fetch(`${base}/admin/auto-scan`, {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+          signal: controller.signal
+        });
         clearTimeout(t);
         if (resp.ok) {
           const data = await resp.json();
@@ -368,9 +389,13 @@ async function performAutoAiScan(url) {
     }
 
     // Выполняем AI-скан в фоне (не блокируем пользователя)
+    const token = await getAuthToken();
     fetch(`${apiBase}/v1/ai/scan`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
       body: JSON.stringify({ urls: [url] })
     }).then(resp => {
       if (resp.ok) {
@@ -563,9 +588,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         const controller = new AbortController();
         const t = setTimeout(() => controller.abort(), 12000);
+        const token = await getAuthToken();
         const resp = await fetch(`${apiBase}/v1/email/analyze`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': token ? `Bearer ${token}` : ''
+          },
           body: JSON.stringify({
             platform: payload.platform,
             message_key: payload.messageKey,
@@ -621,7 +650,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           try {
             const controller = new AbortController();
             const t = setTimeout(() => controller.abort(), 2500);
-            const resp = await fetch(`${base}/incidents/stats`, { signal: controller.signal });
+            const token = await getAuthToken();
+            const resp = await fetch(`${base}/incidents/stats`, {
+              headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+              signal: controller.signal
+            });
             clearTimeout(t);
             if (!resp.ok) continue;
             const stats = await resp.json();
@@ -667,9 +700,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 минуты таймаут
 
+        const token = await getAuthToken();
         const resp = await fetch(`${apiBase}/v1/vuln/gobuster`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': token ? `Bearer ${token}` : ''
+          },
           body: JSON.stringify({ url: targetUrl, wordlist: wordlist }), // Используем нормализованный URL и выбранный словарь
           signal: controller.signal
         });
@@ -705,20 +742,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       try {
         console.log('Running Port Scan for URL:', message.url);
-        
+
         // Нормализация URL для получения домена
         const targetUrl = normalizeTargetUrl(message.url);
         console.log('Normalized Target URL:', targetUrl);
-        
+
         const apiBase = await resolveApiBase();
         console.log('Using API base:', apiBase);
 
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 минуты таймаут
 
+        const token = await getAuthToken();
         const resp = await fetch(`${apiBase}/v1/vuln/portscan`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': token ? `Bearer ${token}` : ''
+          },
           body: JSON.stringify({ url: targetUrl }),
           signal: controller.signal
         });
@@ -760,9 +801,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 минуты таймаут
 
+        const token = await getAuthToken();
         const resp = await fetch(`${apiBase}/v1/vuln/jsdirbuster`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': token ? `Bearer ${token}` : ''
+          },
           body: JSON.stringify({ url: message.url, wordlist: message.wordlist || null }),
           signal: controller.signal
         });

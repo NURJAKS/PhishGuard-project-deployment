@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from typing import Optional, List
 from jose import JWTError, jwt
 import bcrypt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from database import get_db
@@ -16,7 +16,11 @@ SECRET_KEY = "SUPER_SECRET_KEY_REPLACE_IN_PRODUCTION"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 480 # 8 hours
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
+class OptionalOAuth2PasswordBearer(OAuth2PasswordBearer):
+    async def __call__(self, request: Request) -> Optional[str]:
+        return await super().__call__(request) if request.headers.get("Authorization") else None
+
+oauth2_scheme = OptionalOAuth2PasswordBearer(tokenUrl="auth/login", auto_error=False)
 
 # Redis Configuration
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
@@ -47,6 +51,10 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    
+    if not token:
+        raise credentials_exception
+
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
@@ -55,7 +63,12 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     except JWTError:
         raise credentials_exception
     
+    from sqlalchemy import func
+    # Try exact match first for performance and to handle legacy case-variant duplicates
     user = db.query(User).filter(User.username == username).first()
+    if not user:
+        # Fallback to case-insensitive match
+        user = db.query(User).filter(func.lower(User.username) == username.lower()).first()
     if user is None:
         raise credentials_exception
     return user
@@ -106,7 +119,17 @@ class RoleChecker:
         self.allowed_roles = allowed_roles
 
     def __call__(self, user: User = Depends(get_current_user)):
-        if not user.user_role or user.user_role.name not in self.allowed_roles:
+        if not user.user_role:
+             raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Пользователю не назначена роль"
+            )
+        
+        # Admin bypass for local testing and super-admin access
+        if user.user_role.name == "admin_gov":
+            return user
+
+        if user.user_role.name not in self.allowed_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="У вас недостаточно прав для выполнения этого действия"

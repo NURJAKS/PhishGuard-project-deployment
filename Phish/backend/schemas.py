@@ -11,13 +11,28 @@ class UserCreate(UserBase):
     password: str
     role_id: Optional[int] = None
 
+class PlanBase(BaseModel):
+    name: str
+    daily_limit: int
+    has_ai: int
+    has_api: int
+    has_bulk: int
+
+class PlanResponse(PlanBase):
+    id: int
+    class Config:
+        from_attributes = True
+
 class UserResponse(UserBase):
     id: int
     role_id: Optional[int]
+    plan_id: Optional[int]
     status: str
     is_verified: int
+    daily_scans_count: int = 0
     created_at: datetime
-    role_name: Optional[str] = None # Added via computation or relationship
+    role_name: Optional[str] = None
+    plan_name: Optional[str] = None
 
     class Config:
         from_attributes = True

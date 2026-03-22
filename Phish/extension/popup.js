@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const mainContent = document.getElementById('main-content');
     const statusDot = document.getElementById('status-dot');
     const statusText = document.getElementById('status-text');
+    const statusCard = document.getElementById('status-card-main');
     const currentUrlDiv = document.getElementById('current-url');
     const totalBlocked = document.getElementById('total-blocked');
     const totalWarned = document.getElementById('total-warned');
@@ -41,10 +42,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const vulnDot = document.getElementById('vuln-dot');
     const vulnText = document.getElementById('vuln-text');
     const vulnDetails = document.getElementById('vuln-details');
+    const upgradePlanBtn = document.getElementById('upgrade-plan-btn');
     const sqlScanBtn = document.getElementById('sql-scan');
     const crawlerScanBtn = document.getElementById('crawler-scan');
     const phpScanBtn = document.getElementById('php-scan');
     const jsdirbusterBtn = document.getElementById('jsdirbuster-scan');
+    if (!jsdirbusterBtn) console.warn('Button jsdirbuster-scan not found in HTML');
     const checkDnsBtn = document.getElementById('check-dns');
     const dnsCheckStatus = document.getElementById('dnsCheckStatus');
     const dnsDot = document.getElementById('dns-dot');
@@ -56,10 +59,641 @@ document.addEventListener('DOMContentLoaded', async () => {
     const dnsGeo = document.getElementById('dns-geo');
     const dnsHosting = document.getElementById('dns-hosting');
 
+    // Localization
+    const langSwitch = document.getElementById('lang-switch');
+    const langText = document.getElementById('lang-text');
+    let currentLang = 'EN';
+
+    const translations = {
+        EN: {
+            subtitle: 'Advanced Protection',
+            dashboard: 'Dashboard',
+            documents: 'Documents',
+            siteScan: 'Site Scan',
+            dnsScan: 'DNS Scan',
+            aiScan: 'AI-Scan',
+            webScan: 'Web Scan',
+            cleanup: 'Cleanup',
+            exit: 'Safe Exit',
+            paymentAnalysis: 'Payment Analysis...',
+            siteScanning: 'Site Scanning...',
+            aiScanning: 'AI Scanning...',
+            dnsScanning: 'DNS Scanning...',
+            webScanning: 'Starting WEB scan...',
+            siteChecked: '✓ Site checked - all good',
+            foundSuspicious: '⚠️ Found {count} suspicious elements',
+            failedScan: '❌ Failed to scan page',
+            dnsComplete: '✓ DNS scan complete',
+            dnsError: '❌ DNS check error',
+            webComplete: '✓ WEB scan complete',
+            safePayment: '✓ Safe payment',
+            riskPayment: '⚠️ Payment risks detected',
+            upgradePlan: 'Upgrade Plan',
+            labelPlan: 'Plan:',
+            labelDailyScans: 'Scans today:',
+            logout: 'Logout',
+            loginTitle: 'Login to PhishGuard',
+            loginSubtitle: 'Login to use AI-scan and reports',
+            usernamePlaceholder: 'Username',
+            passwordPlaceholder: 'Password',
+            loginBtn: 'Login',
+            noAccount: 'No account?',
+            registerLink: 'Register',
+            registerTitle: 'Registration',
+            optPublic: 'Regular User',
+            optBusiness: 'Business (Company)',
+            optGovernment: 'Government',
+            createAccountBtn: 'Create Account',
+            hasAccount: 'Already have an account?',
+            loginLink: 'Login',
+            syncing: 'Syncing...',
+            emailAutoTitle: 'Email: automatic check',
+            emailAutoDesc: 'Analysis of metadata and links when opening mail',
+            labelBlocked: 'Blocked',
+            labelWarned: 'Warnings'
+        },
+        RU: {
+            subtitle: 'Продвинутая защита',
+            dashboard: 'Панель',
+            documents: 'Файлы',
+            siteScan: 'Сайт',
+            dnsScan: 'DNS',
+            aiScan: 'AI-Скан',
+            webScan: 'Веб-Скан',
+            cleanup: 'Очистка',
+            exit: 'Выход',
+            paymentAnalysis: 'Анализ оплаты...',
+            siteScanning: 'Проверка сайта...',
+            aiScanning: 'ИИ-сканирование...',
+            dnsScanning: 'Проверка DNS...',
+            webScanning: 'Запуск WEB-скана...',
+            siteChecked: '✓ Сайт проверен - всё чисто',
+            foundSuspicious: '⚠️ Найдено {count} подозрительных элементов',
+            failedScan: '❌ Ошибка проверки страницы',
+            dnsComplete: '✓ DNS проверка завершена',
+            dnsError: '❌ Ошибка DNS проверки',
+            webComplete: '✓ WEB скан завершен',
+            safePayment: '✓ Оплата безопасна',
+            riskPayment: '⚠️ Риски при оплате',
+            upgradePlan: 'Улучшить план',
+            labelPlan: 'План:',
+            labelDailyScans: 'Сканирований сегодня:',
+            logout: 'Выйти',
+            loginTitle: 'Вход в PhishGuard',
+            loginSubtitle: 'Войдите, чтобы использовать AI-скан и отчеты',
+            usernamePlaceholder: 'Имя пользователя',
+            passwordPlaceholder: 'Пароль',
+            loginBtn: 'Войти',
+            noAccount: 'Нет аккаунта?',
+            registerLink: 'Зарегистрироваться',
+            registerTitle: 'Регистрация',
+            optPublic: 'Обычный пользователь',
+            optBusiness: 'Бизнес (Компания)',
+            optGovernment: 'Государство',
+            createAccountBtn: 'Создать аккаунт',
+            hasAccount: 'Уже есть аккаунт?',
+            loginLink: 'Войти',
+            syncing: 'Синхронизация...',
+            emailAutoTitle: 'Email: автоматическая проверка',
+            emailAutoDesc: 'Анализ метаданных и ссылок при открытии письма',
+            labelBlocked: 'Заблокировано',
+            labelWarned: 'Предупреждений'
+        },
+        KK: {
+            subtitle: 'Кеңейтілген қорғаныс',
+            dashboard: 'Басқару панелі',
+            documents: 'Құжаттар',
+            siteScan: 'Сайтты сканерлеу',
+            dnsScan: 'DNS сканерлеу',
+            aiScan: 'AI-сканерлеу',
+            webScan: 'Веб-сканерлеу',
+            cleanup: 'Тазалау',
+            exit: 'Қауіпсіз шығу',
+            paymentAnalysis: 'Төлемді талдау...',
+            siteScanning: 'Сайтты тексеру...',
+            aiScanning: 'ИИ-сканирлеу...',
+            dnsScanning: 'DNS тексеру...',
+            webScanning: 'ВЕБ-сканерлеуді бастау...',
+            siteChecked: '✓ Сайт тексерілді - бәрі таза',
+            foundSuspicious: '⚠️ {count} күдікті элемент табылды',
+            failedScan: '❌ Бетті сканерлеу қатесі',
+            dnsComplete: '✓ DNS тексеру аяқталды',
+            dnsError: '❌ DNS тексеру қатесі',
+            webComplete: '✓ ВЕБ-сканерлеу аяқталды',
+            safePayment: '✓ Төлем қауіпсіз',
+            riskPayment: '⚠️ Төлем тәуекелдері анықталды',
+            upgradePlan: 'Жоспарды жаңарту',
+            labelPlan: 'Жоспар:',
+            labelDailyScans: 'Бүгінгі сканерлеу:',
+            logout: 'Шығу',
+            loginTitle: 'PhishGuard-қа кіру',
+            loginSubtitle: 'AI-сканерлеу мен есептерді пайдалану үшін жүйеге кіріңіз',
+            usernamePlaceholder: 'Пайдаланушы аты',
+            passwordPlaceholder: 'Құпия сөз',
+            loginBtn: 'Кіру',
+            noAccount: 'Аккаунтыңыз жоқ па?',
+            registerLink: 'Тіркелу',
+            registerTitle: 'Тіркелу',
+            optPublic: 'Жай пайдаланушы',
+            optBusiness: 'Бизнес (Компания)',
+            optGovernment: 'Мемлекет',
+            createAccountBtn: 'Аккаунт жасау',
+            hasAccount: 'Аккаунтыңыз бар ма?',
+            loginLink: 'Кіру',
+            syncing: 'Синхрондау...',
+            emailAutoTitle: 'Email: автоматты түрде тексеру',
+            emailAutoDesc: 'Хатты ашқанда метадеректер мен сілтемелерді талдау',
+            labelBlocked: 'Блокталған',
+            labelWarned: 'Ескертулер'
+        }
+    };
+
+    function t(key, params = {}) {
+        let text = translations[currentLang][key] || key;
+        for (const p in params) {
+            text = text.replace(`{${p}}`, params[p]);
+        }
+        return text;
+    }
+
+    function updateUIStrings() {
+        if (langText) langText.textContent = currentLang;
+        const sub = document.querySelector('.header .subtitle');
+        if (sub) sub.textContent = t('subtitle');
+        if (openDashboardBtn) openDashboardBtn.textContent = t('dashboard');
+        if (openDocumentsBtn) openDocumentsBtn.textContent = t('documents');
+        if (scanSecretsBtn) scanSecretsBtn.textContent = t('siteScan');
+        if (checkDnsBtn) checkDnsBtn.textContent = t('dnsScan');
+        if (aiScanBtn) aiScanBtn.textContent = t('aiScan');
+        if (vulnScanBtn) vulnScanBtn.textContent = t('webScan');
+        if (clearCacheBtn) clearCacheBtn.textContent = t('cleanup');
+        if (paymentBackBtn) paymentBackBtn.textContent = t('exit');
+        if (upgradePlanBtn) upgradePlanBtn.textContent = t('upgradePlan');
+
+        // New elements
+        const labelPlan = document.getElementById('label-plan');
+        if (labelPlan) labelPlan.textContent = t('labelPlan');
+        const labelDailyScans = document.getElementById('label-daily-scans');
+        if (labelDailyScans) labelDailyScans.textContent = t('labelDailyScans');
+        const logoutBtnText = document.getElementById('logout-btn');
+        if (logoutBtnText) logoutBtnText.textContent = t('logout');
+
+        const loginTitle = document.getElementById('login-title');
+        if (loginTitle) loginTitle.textContent = t('loginTitle');
+        const loginSubtitle = document.getElementById('login-subtitle');
+        if (loginSubtitle) loginSubtitle.textContent = t('loginSubtitle');
+        if (loginUsernameInput) loginUsernameInput.placeholder = t('usernamePlaceholder');
+        if (loginPasswordInput) loginPasswordInput.placeholder = t('passwordPlaceholder');
+        if (loginBtn) loginBtn.textContent = t('loginBtn');
+        const noAccountText = document.getElementById('no-account-text');
+        if (noAccountText) noAccountText.textContent = t('noAccount');
+        if (showRegisterLink) showRegisterLink.textContent = t('registerLink');
+
+        const registerTitle = document.getElementById('register-title');
+        if (registerTitle) registerTitle.textContent = t('registerTitle');
+        if (regUsernameInput) regUsernameInput.placeholder = t('usernamePlaceholder');
+        if (regPasswordInput) regPasswordInput.placeholder = t('passwordPlaceholder');
+        const optPublic = document.getElementById('opt-public');
+        if (optPublic) optPublic.textContent = t('optPublic');
+        const optBusiness = document.getElementById('opt-business');
+        if (optBusiness) optBusiness.textContent = t('optBusiness');
+        const optGovernment = document.getElementById('opt-government');
+        if (optGovernment) optGovernment.textContent = t('optGovernment');
+        if (doRegisterBtn) doRegisterBtn.textContent = t('createAccountBtn');
+        const hasAccountText = document.getElementById('has-account-text');
+        if (hasAccountText) hasAccountText.textContent = t('hasAccount');
+        if (showLoginLink) showLoginLink.textContent = t('loginLink');
+
+        const syncText = document.getElementById('sync-text');
+        if (syncText) syncText.textContent = t('syncing');
+
+        const emailAutoTitle = document.getElementById('email-auto-title');
+        if (emailAutoTitle) emailAutoTitle.textContent = t('emailAutoTitle');
+        const emailAutoDesc = document.getElementById('email-auto-desc');
+        if (emailAutoDesc) emailAutoDesc.textContent = t('emailAutoDesc');
+
+        const labelBlocked = document.getElementById('label-blocked');
+        if (labelBlocked) labelBlocked.textContent = t('labelBlocked');
+        const labelWarned = document.getElementById('label-warned');
+        if (labelWarned) labelWarned.textContent = t('labelWarned');
+    }
+
+    function translateNiktoOutput(output) {
+        if (!output) return '';
+        let lines = output.split('\n');
+        let filteredLines = [];
+        let serverLine = '';
+
+        lines.forEach(line => {
+            const trimmed = line.trim();
+            // Скрываем техническую информацию
+            if (trimmed.startsWith('- Версия Nikto v') || trimmed.startsWith('- Nikto v')) return;
+            if (trimmed.includes('-----------------------')) return;
+            if (trimmed.includes('Scan terminated') || trimmed.includes('host(s) tested')) return;
+            if (trimmed.includes('Host maximum execution time')) return;
+            if (trimmed.includes('Время начала') || trimmed.includes('Время завершения')) return;
+            if (trimmed.includes('Start Time') || trimmed.includes('End Time')) return;
+            if (trimmed.includes('Root page') && trimmed.includes('redirects to')) return;
+
+            // Буферизуем Server
+            if (trimmed.includes('Server:') || trimmed.includes('Сервер:')) {
+                serverLine = line;
+                return;
+            }
+
+            // Переводы основных меток
+            let res = line;
+            if (currentLang === 'RU') {
+                res = res.replace(/\+ Target IP:\s+/g, currentLang === 'KK' ? '+ Нысана IP: ' : '+ Целевой IP: ');
+                res = res.replace(/\+ Target Hostname:\s+/g, currentLang === 'KK' ? '+ Хост: ' : '+ Хост: ');
+                res = res.replace(/\+ Target Port:\s+/g, currentLang === 'KK' ? '+ Порт: ' : '+ Порт: ');
+                res = res.replace(/\+ SSL Info:/g, currentLang === 'KK' ? '+ SSL инфо:' : '+ SSL инфо:');
+            }
+
+            // Обработка SSL подразделов (Subject, Altnames, Ciphers, Issuer)
+            const sslLabels = ['Subject', 'Altnames', 'Ciphers', 'Issuer'];
+            let isSslSubline = false;
+
+            for (const label of sslLabels) {
+                if (trimmed.includes(label + ':')) {
+                    const colonIdx = line.indexOf(label + ':');
+                    const val = line.substring(colonIdx + label.length + 1).trim();
+
+                    let displayLabel = label;
+                    if (currentLang === 'RU' || currentLang === 'KK') {
+                        if (label === 'Subject') displayLabel = currentLang === 'KK' ? 'Субъект' : 'Субъект';
+                        if (label === 'Altnames') displayLabel = currentLang === 'KK' ? 'Альт. атаулар' : 'Альт. имена';
+                        if (label === 'Ciphers') displayLabel = currentLang === 'KK' ? 'Шифрлар' : 'Шифры';
+                        if (label === 'Issuer') displayLabel = currentLang === 'KK' ? 'Шығарушы' : 'Издатель';
+                    }
+
+                    res = `${displayLabel}: ${val}`;
+                    isSslSubline = true;
+                    break;
+                }
+            }
+
+            if (!isSslSubline) {
+                // Если это заголовок SSL инфо без данных, пропускаем его
+                if (trimmed.startsWith('+ SSL Info:') || trimmed.startsWith('+ SSL инфо:')) {
+                    if (trimmed.includes('Subject:')) {
+                        const subjIdx = trimmed.indexOf('Subject:');
+                        const subjVal = trimmed.substring(subjIdx + 8).trim();
+                        const disp = currentLang === 'RU' ? 'Субъект' : 'Subject';
+                        res = `${disp}: ${subjVal}`;
+                    } else {
+                        return; // Пропускаем строку заголовок
+                    }
+                }
+                res = res.trim();
+            }
+
+            if (res) filteredLines.push(res);
+        });
+
+        let finalLines = [];
+        let portIdx = -1;
+        filteredLines.forEach((line) => {
+            finalLines.push(line);
+            if (line.includes('Port:') || line.includes('Порт:')) {
+                portIdx = finalLines.length;
+            }
+        });
+
+        if (serverLine && portIdx !== -1) {
+            let translatedServer = serverLine;
+            if (currentLang === 'RU') {
+                translatedServer = translatedServer.replace(/\+ Server:\s+/g, '+ Сервер: ');
+            }
+            finalLines.splice(portIdx, 0, translatedServer);
+
+            // ОДИН пустой абзац ПЕРЕД результатами (Субъект)
+            let sslIdx = -1;
+            for (let i = 0; i < finalLines.length; i++) {
+                if (finalLines[i].includes('Субъект:') || finalLines[i].includes('Subject:')) {
+                    sslIdx = i;
+                    break;
+                }
+            }
+            if (sslIdx !== -1) {
+                finalLines.splice(sslIdx, 0, '');
+            }
+        }
+
+        return finalLines.join('\n').trim();
+    }
+
+    if (langSwitch) {
+        langSwitch.addEventListener('click', async () => {
+            if (currentLang === 'EN') {
+                currentLang = 'RU';
+            } else if (currentLang === 'RU') {
+                currentLang = 'KK';
+            } else {
+                currentLang = 'EN';
+            }
+            await chrome.storage.local.set({ appLanguage: currentLang });
+            updateUIStrings();
+        });
+    }
+
+    // Load saved language
+    chrome.storage.local.get(['appLanguage'], (res) => {
+        if (res.appLanguage) {
+            currentLang = res.appLanguage;
+            updateUIStrings();
+        }
+    });
+
     // Email auto-check toggle
     const emailAutoToggle = document.getElementById('email-auto-toggle');
     const EMAIL_AUTO_KEY = 'emailAutoEnabled';
+    const AUTH_TOKEN_KEY = 'auth_token';
+
+    // Auth Elements
+    const userProfileSection = document.getElementById('user-profile');
+    const loginSection = document.getElementById('login-section');
+    const registerSection = document.getElementById('register-section');
+    const profileUsername = document.getElementById('profile-username');
+    const profileRole = document.getElementById('profile-role');
+    const profilePlan = document.getElementById('profile-plan');
+    const dailyCount = document.getElementById('daily-count');
+    const dailyLimit = document.getElementById('daily-limit');
+
+    const loginUsernameInput = document.getElementById('login-username');
+    const loginPasswordInput = document.getElementById('login-password');
+    const loginBtn = document.getElementById('login-btn');
+    const logoutBtn = document.getElementById('logout-btn');
+    const showRegisterLink = document.getElementById('show-register');
+    const showLoginLink = document.getElementById('show-login');
+
+    const regUsernameInput = document.getElementById('reg-username');
+    const regPasswordInput = document.getElementById('reg-password');
+    const regSectorSelect = document.getElementById('reg-sector');
+    const doRegisterBtn = document.getElementById('do-register-btn');
+
     let currentTab = null;
+    let currentUser = null;
+
+    async function getApiBase() {
+        return 'http://127.0.0.1:8002'; // Default for extension
+    }
+
+    async function updateAuthUI() {
+        const token = (await chrome.storage.local.get([AUTH_TOKEN_KEY]))[AUTH_TOKEN_KEY];
+
+        if (!token) {
+            userProfileSection.style.display = 'none';
+            loginSection.style.display = 'block';
+            registerSection.style.display = 'none';
+            mainContent.style.opacity = '0.3';
+            mainContent.style.pointerEvents = 'none';
+            // Не показываем ошибку здесь, чтобы не мешать входу
+            errorDiv.style.display = 'none';
+            return;
+        }
+
+        loginSection.style.display = 'none';
+        registerSection.style.display = 'none';
+        userProfileSection.style.display = 'block';
+        mainContent.style.opacity = '1';
+        mainContent.style.pointerEvents = 'auto';
+
+        if (!currentUser) {
+            await fetchUserProfile(token);
+        }
+
+        if (currentUser) {
+            profileUsername.textContent = currentUser.username;
+            if (profileRole) profileRole.textContent = currentUser.role_name || 'User';
+            profilePlan.textContent = currentUser.plan_name || 'Free';
+            dailyCount.textContent = currentUser.daily_scans_count || 0;
+            // Limit mapping for UI (fallback if not in user object)
+            const limits = { 'Free': '∞', 'Pro': '∞', 'Business': '∞', 'Gov': '∞' };
+            dailyLimit.textContent = limits[currentUser.plan_name] || '∞';
+
+            // Apply Role-Based Visibility
+            applyRbacVisibility(currentUser.role_name);
+        }
+    }
+
+    function applyRbacVisibility(role) {
+        const isFree = role === 'User_Free';
+        const isBusiness = role === 'Business';
+        const isAdmin = role === 'admin_gov';
+
+        // 0. Upgrade Button - Hide for Admin/Gov
+        if (upgradePlanBtn) {
+            upgradePlanBtn.style.display = isAdmin ? 'none' : 'block';
+        }
+
+        // 1. AI Scan - Visible for everyone
+        if (aiScanBtn) {
+            aiScanBtn.parentElement.style.display = (isFree || isBusiness || isAdmin) ? 'flex' : 'none';
+            aiScanBtn.style.display = (isFree || isBusiness || isAdmin) ? 'block' : 'none';
+        }
+
+        // 2. Dashboard - Available for Business, Free, and Admin
+        if (openDashboardBtn) {
+            openDashboardBtn.style.display = (isFree || isBusiness || isAdmin) ? 'block' : 'none';
+        }
+
+        // 3. Documents - Available for Business and Admin
+        if (openDocumentsBtn) {
+            openDocumentsBtn.style.display = (isBusiness || isAdmin) ? 'block' : 'none';
+        }
+
+        // 4. Website Check (JS Scan) - Available for Business and Admin
+        if (scanSecretsBtn) {
+            scanSecretsBtn.style.display = (isBusiness || isAdmin) ? 'block' : 'none';
+        }
+
+        // 5. DNS Check - Available for Business and Admin (and Free as per original code)
+        if (checkDnsBtn) {
+            checkDnsBtn.style.display = (isFree || isBusiness || isAdmin) ? 'block' : 'none';
+        }
+
+        // 6. Vuln Scan - Available for Business and Admin
+        if (vulnScanBtn) {
+            vulnScanBtn.style.display = (isBusiness || isAdmin) ? 'block' : 'none';
+        }
+
+        // 7. Email Auto Check - Visible for everyone
+        const emailAutoCard = document.getElementById('email-auto-card');
+        if (emailAutoCard) {
+            emailAutoCard.style.display = (isFree || isBusiness || isAdmin) ? 'block' : 'none';
+        }
+
+        // --- Hiding other tools for Business ---
+
+        // SQL, Crawler, PHP, JS Dirbuster - ONLY for Admin
+        if (sqlScanBtn) sqlScanBtn.style.display = isAdmin ? 'block' : 'none';
+        if (crawlerScanBtn) crawlerScanBtn.style.display = isAdmin ? 'block' : 'none';
+        if (phpScanBtn) phpScanBtn.style.display = isAdmin ? 'block' : 'none';
+        if (jsdirbusterBtn) jsdirbusterBtn.style.display = isAdmin ? 'block' : 'none';
+
+        // Clear Cache - Admin AND Business
+        if (clearCacheBtn) clearCacheBtn.style.display = (isBusiness || isAdmin) ? 'block' : 'none';
+
+        // Admin Panel - ONLY for Admin
+        if (openAdminPanelBtn) openAdminPanelBtn.style.display = isAdmin ? 'block' : 'none';
+
+        // Back to Safety (Payment) - Available for everyone
+        if (paymentBackBtn) {
+            paymentBackBtn.style.display = (isFree || isBusiness || isAdmin) ? 'block' : 'none';
+        }
+
+        // Handle parent containers of grouped buttons
+        // Group: Dashboard, Documents
+        if (openDashboardBtn && openDashboardBtn.parentElement) {
+            const hasVisible = Array.from(openDashboardBtn.parentElement.children).some(child => child.style.display !== 'none');
+            openDashboardBtn.parentElement.style.display = hasVisible ? 'flex' : 'none';
+        }
+
+        // Group: scanSecretsBtn, checkDnsBtn
+        if (scanSecretsBtn && scanSecretsBtn.parentElement) {
+            const hasVisible = Array.from(scanSecretsBtn.parentElement.children).some(child => child.style.display !== 'none');
+            scanSecretsBtn.parentElement.style.display = hasVisible ? 'flex' : 'none';
+        }
+
+        // Group: AI Scan
+        if (aiScanBtn && aiScanBtn.parentElement) {
+            const hasVisible = Array.from(aiScanBtn.parentElement.children).some(child => child.style.display !== 'none');
+            aiScanBtn.parentElement.style.display = hasVisible ? 'flex' : 'none';
+        }
+
+        // Group: vulnScanBtn, clearCacheBtn
+        if (vulnScanBtn && vulnScanBtn.parentElement) {
+            const hasVisible = Array.from(vulnScanBtn.parentElement.children).some(child => child.style.display !== 'none');
+            vulnScanBtn.parentElement.style.display = hasVisible ? 'flex' : 'none';
+        }
+
+        // Group: Admin tools (SQL, Crawler, etc)
+        if (sqlScanBtn && sqlScanBtn.parentElement) {
+            const hasVisible = Array.from(sqlScanBtn.parentElement.children).some(child => child.style.display !== 'none');
+            sqlScanBtn.parentElement.style.display = hasVisible ? 'flex' : 'none';
+        }
+
+        // Group: Back to safety
+        if (paymentBackBtn && paymentBackBtn.parentElement) {
+            const hasVisible = Array.from(paymentBackBtn.parentElement.children).some(child => child.style.display !== 'none');
+            paymentBackBtn.parentElement.style.display = hasVisible ? 'flex' : 'none';
+        }
+    }
+
+    async function fetchUserProfile(token) {
+        try {
+            const apiBase = await getApiBase();
+            const resp = await fetch(`${apiBase}/auth/me`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (resp.ok) {
+                currentUser = await resp.json();
+            } else if (resp.status === 401) {
+                await logoutUser();
+            }
+        } catch (e) {
+            console.error('Fetch profile error:', e);
+        }
+    }
+
+    async function loginUser() {
+        const username = loginUsernameInput.value;
+        const password = loginPasswordInput.value;
+        if (!username || !password) return;
+
+        loginBtn.disabled = true;
+        loginBtn.textContent = 'Вход...';
+
+        try {
+            const apiBase = await getApiBase();
+            const formData = new URLSearchParams();
+            formData.append('username', username);
+            formData.append('password', password);
+
+            const resp = await fetch(`${apiBase}/auth/token`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: formData
+            });
+
+            if (resp.ok) {
+                const data = await resp.json();
+                await chrome.storage.local.set({ [AUTH_TOKEN_KEY]: data.access_token });
+                currentUser = null;
+                await updateAuthUI();
+                await loadStats(); // Refresh stats with new token
+                if (currentTab && isAnalyzableUrl(currentTab.url)) {
+                    await checkCurrentUrl(true); // Re-check current URL
+                }
+            } else {
+                const err = await resp.json();
+                showError('Ошибка входа: ' + (err.detail || 'Неверные данные'));
+            }
+        } catch (e) {
+            showError('Ошибка сети: ' + e.message);
+        } finally {
+            loginBtn.disabled = false;
+            loginBtn.textContent = 'Войти';
+        }
+    }
+
+    async function registerUser() {
+        const username = regUsernameInput.value;
+        const password = regPasswordInput.value;
+        const sector = regSectorSelect.value;
+        if (!username || !password) return;
+
+        doRegisterBtn.disabled = true;
+        doRegisterBtn.textContent = 'Создание...';
+
+        try {
+            const apiBase = await getApiBase();
+            const resp = await fetch(`${apiBase}/auth/register`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password, sector, email: `${username}@placeholder.com` })
+            });
+
+            if (resp.ok) {
+                showSuccess('Аккаунт создан! Теперь войдите.');
+                registerSection.style.display = 'none';
+                loginSection.style.display = 'block';
+            } else {
+                const err = await resp.json();
+                showError('Ошибка регистрации: ' + (err.detail || 'Попробуйте другое имя'));
+            }
+        } catch (e) {
+            showError('Ошибка сети: ' + e.message);
+        } finally {
+            doRegisterBtn.disabled = false;
+            doRegisterBtn.textContent = 'Создать аккаунт';
+        }
+    }
+
+    async function logoutUser() {
+        await chrome.storage.local.remove([AUTH_TOKEN_KEY]);
+        currentUser = null;
+        await updateAuthUI();
+    }
+
+    // Attach Auth Event Listeners
+    if (loginBtn) loginBtn.addEventListener('click', loginUser);
+    if (logoutBtn) logoutBtn.addEventListener('click', logoutUser);
+    if (showRegisterLink) showRegisterLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        loginSection.style.display = 'none';
+        registerSection.style.display = 'block';
+    });
+    if (showLoginLink) showLoginLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        registerSection.style.display = 'none';
+        loginSection.style.display = 'block';
+    });
+    if (doRegisterBtn) doRegisterBtn.addEventListener('click', registerUser);
+
+    // Initial Auth Check
+    await updateAuthUI();
     function isAnalyzableUrl(url) {
         if (!url) return false;
         const lower = url.toLowerCase();
@@ -69,6 +703,33 @@ document.addEventListener('DOMContentLoaded', async () => {
         return lower.startsWith('http://') || lower.startsWith('https://');
     }
 
+
+    function showError(msg) {
+        if (!errorDiv) return;
+        errorDiv.textContent = msg;
+        errorDiv.style.display = 'block';
+        errorDiv.style.background = 'rgba(244, 67, 54, 0.2)';
+        errorDiv.style.borderColor = '#f44336';
+        errorDiv.style.color = '#ff8a80';
+
+        // Автоматически скрываем через 5 секунд
+        setTimeout(() => {
+            errorDiv.style.display = 'none';
+        }, 5000);
+    }
+
+    function showSuccess(msg) {
+        if (!errorDiv) return;
+        errorDiv.textContent = msg;
+        errorDiv.style.display = 'block';
+        errorDiv.style.background = 'rgba(76, 175, 80, 0.2)';
+        errorDiv.style.borderColor = '#4CAF50';
+        errorDiv.style.color = '#a5d6a7';
+
+        setTimeout(() => {
+            errorDiv.style.display = 'none';
+        }, 5000);
+    }
 
     // Получаем текущую вкладку
     try {
@@ -121,6 +782,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             chrome.tabs.create({ url: localDashboardUrl });
         }
     });
+
+    if (upgradePlanBtn) {
+        upgradePlanBtn.addEventListener('click', () => {
+            // Аналогично Dashboard, пробуем сначала Streamlit
+            try {
+                chrome.tabs.create({ url: 'http://localhost:8501' });
+            } catch (e) {
+                const localDashboardUrl = chrome.runtime.getURL('dashboard.html');
+                chrome.tabs.create({ url: localDashboardUrl });
+            }
+        });
+    }
 
     openAdminPanelBtn.addEventListener('click', () => {
         const adminPanelUrl = chrome.runtime.getURL('admin-panel.html');
@@ -506,8 +1179,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 meta: { user_agent: navigator.userAgent }
             };
 
+            const token = (await chrome.storage.local.get(['auth_token'])).auth_token;
             const resp = await fetch(`${base}/analyze_payment`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': token ? `Bearer ${token}` : ''
+                },
                 body: JSON.stringify(payload)
             });
 
@@ -532,7 +1210,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 safe: data.safe,
                 score: data.score || 0,
                 reasons: data.reasons || [],
-                message: data.safe ? '✓ Оплата безопасна' : '⚠️ Обнаружены риски при оплате'
+                message: data.safe ? t('safePayment') : t('riskPayment')
             };
         } catch (e) {
             // Fallback: локальная проверка
@@ -556,7 +1234,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     scanSecretsBtn.addEventListener('click', async () => {
         if (!currentTab || !isAnalyzableUrl(currentTab.url)) return;
         secretScanStatus.style.display = 'block';
-        secretText.textContent = 'Проверка сайта...';
+        secretText.textContent = t('siteScanning');
         secretDot.className = 'status-dot';
         secretDot.style.background = '#666666';
         secretSummary.textContent = '';
@@ -574,10 +1252,22 @@ document.addEventListener('DOMContentLoaded', async () => {
                     base = b; break;
                 } catch (_) { }
             }
+            const token = (await chrome.storage.local.get(['auth_token'])).auth_token;
             const resp = await fetch(`${base}/v1/scan/secrets`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': token ? `Bearer ${token}` : ''
+                },
                 body: JSON.stringify({ url: currentTab.url, use_pinkerton: true })
             });
+
+            if (resp.status === 401) {
+                secretScanStatus.style.display = 'none';
+                updateAuthUI();
+                return;
+            }
+
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const data = await resp.json();
             const total = data.total_findings || 0;
@@ -587,12 +1277,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // Упрощенный результат для пользователя
             if (total > 0) {
-                secretText.textContent = `⚠️ Найдено ${total} подозрительных элементов`;
+                secretText.textContent = t('foundSuspicious', { count: total });
                 secretDot.className = 'status-dot';
                 secretDot.style.background = '#ffaa00';
                 secretSummary.textContent = `На странице найдены подозрительные элементы. Рекомендуем быть осторожными и не вводить свои личные данные на этом сайте.`;
             } else {
-                secretText.textContent = `✓ Сайт проверен - все в порядке`;
+                secretText.textContent = t('siteChecked');
                 secretDot.className = 'status-dot';
                 secretDot.classList.add('active');
                 if (elements > 0) {
@@ -620,9 +1310,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                 secretLinksSection.style.display = 'none';
             }
         } catch (e) {
-            secretText.textContent = '❌ Не удалось проверить страницу';
-            secretDot.className = 'status-dot inactive';
             const errorMsg = e.message || e.toString();
+            console.error('Secret scan error:', errorMsg);
+
+            if (errorMsg.includes('401') || errorMsg.includes('UNAUTHORIZED') || errorMsg.includes('status: 401')) {
+                secretScanStatus.style.display = 'none';
+                updateAuthUI();
+                return;
+            }
+
+            secretText.textContent = t('failedScan');
+            secretDot.className = 'status-dot inactive';
             if (errorMsg.includes('Failed to fetch') || errorMsg.includes('NetworkError')) {
                 secretSummary.textContent = '⚠️ Backend сервер не запущен! Запустите сервер на http://localhost:8002';
             } else {
@@ -635,7 +1333,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     aiScanBtn.addEventListener('click', async () => {
         if (!currentTab || !isAnalyzableUrl(currentTab.url)) return;
         aiScanStatus.style.display = 'block';
-        aiText.textContent = 'Сканирование...';
+        aiText.textContent = t('aiScanning');
         aiDot.className = 'status-dot';
         aiDot.style.background = '#666666';
         aiDetails.textContent = '';
@@ -664,11 +1362,21 @@ document.addEventListener('DOMContentLoaded', async () => {
                 meta: { user_agent: navigator.userAgent }
             };
 
+            const token = (await chrome.storage.local.get(['auth_token'])).auth_token;
             const resp = await fetch(`${base}/analyze_payment`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': token ? `Bearer ${token}` : ''
+                },
                 body: JSON.stringify(payload)
             });
+
+            if (resp.status === 401) {
+                aiScanStatus.style.display = 'none';
+                updateAuthUI();
+                return;
+            }
 
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const data = await resp.json();
@@ -710,7 +1418,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 statusText = '✓ БЕЗОПАСНО';
                 dotColor = '#4CAF50'; // green
             } else {
-                statusText = '❓ НЕИЗВЕСТНО';
+                statusText = '❓ UNKNOWN';
                 dotColor = '#666666'; // gray
             }
 
@@ -773,7 +1481,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (detailsLines.length > 0) detailsLines.push('');
             detailsLines.push(`Риск: ${riskPercent}%`);
             if (provider !== 'none') {
-                detailsLines.push(`AI: ${provider === 'google' ? 'Google AI' : provider}`);
+                detailsLines.push(`${provider === 'google' ? 'Google AI' : provider}`);
             }
 
             if (detailsLines.length === 0) {
@@ -782,9 +1490,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             aiDetails.textContent = detailsLines.join('\n');
         } catch (e) {
-            aiText.textContent = '❌ Не удалось проверить сайт';
-            aiDot.className = 'status-dot inactive';
             const errorMsg = e.message || e.toString();
+            console.error('AI scan error:', errorMsg);
+
+            if (errorMsg.includes('401') || errorMsg.includes('UNAUTHORIZED') || errorMsg.includes('status: 401')) {
+                aiScanStatus.style.display = 'none';
+                updateAuthUI();
+                return;
+            }
+
+            aiText.textContent = '❌ Failed to scan site';
+            aiDot.className = 'status-dot inactive';
             if (errorMsg.includes('Failed to fetch') || errorMsg.includes('NetworkError') || errorMsg.includes('fetch failed')) {
                 aiDetails.textContent = '⚠️ Backend сервер не запущен! Запустите сервер на http://localhost:8002';
             } else if (errorMsg.includes('HTTP error! status: 500')) {
@@ -803,42 +1519,42 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
         vulnScanStatus.style.display = 'block';
-        vulnText.textContent = 'Запуск Nikto...';
+        vulnText.textContent = t('webScanning');
         vulnDot.className = 'status-dot';
         vulnDot.style.background = '#666666';
         vulnDetails.textContent = '';
         try {
             const resp = await directApiCall('/v1/vuln/nikto', { url: currentTab.url });
-            
-            // Проверяем статус ответа
+
             if (resp?.status && resp.status.startsWith('error:')) {
-                // Если Nikto не установлен или другая ошибка, показываем информационное сообщение
                 vulnText.textContent = resp.status === 'error:not_installed' ? '⚠️ Nikto не установлен' : '⚠️ Ошибка сканирования';
                 vulnDot.className = 'status-dot';
-                vulnDot.style.background = '#ffaa00'; // Оранжевый для предупреждения
+                vulnDot.style.background = '#ffaa00';
                 vulnDetails.textContent = resp?.output || 'Неизвестная ошибка';
             } else {
-                // Успешное выполнение
-                vulnText.textContent = '✓ Nikto scan завершен';
+                vulnText.textContent = t('webComplete');
                 vulnDot.className = 'status-dot';
-                vulnDot.style.background = '#4CAF50'; // Зеленый для успеха
+                vulnDot.style.background = '#4CAF50';
                 vulnDot.classList.add('active');
-                const statusLine = resp?.status ? `Статус: ${resp.status}\n` : '';
-                const output = resp?.output || 'Нет данных от Nikto.';
-                vulnDetails.textContent = statusLine + output;
+
+                const outputRaw = resp?.output || 'No data.';
+                const output = translateNiktoOutput(outputRaw);
+                vulnDetails.textContent = output;
             }
         } catch (e) {
-            vulnText.textContent = '❌ Не удалось запустить Nikto';
-            vulnDot.className = 'status-dot inactive';
             const msg = e?.message || e.toString();
-            if (msg === 'BACKEND_NOT_RUNNING' || msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
-                vulnDetails.textContent = '⚠️ Backend не запущен. Стартуйте backend на http://localhost:8002';
-            } else if (msg.includes('HTTP error! status: 500')) {
-                vulnDetails.textContent = '⚠️ Ошибка на сервере. Проверьте логи backend сервера.';
-            } else {
-                vulnDetails.textContent = `Ошибка: ${msg}`;
+            console.error('Vuln scan error:', msg);
+
+            if (msg.includes('401') || msg.includes('UNAUTHORIZED') || msg.includes('status: 401')) {
+                vulnScanStatus.style.display = 'none';
+                updateAuthUI();
+                return;
             }
-            showError(vulnDetails.textContent);
+
+            vulnText.textContent = '❌ Error';
+            vulnDot.className = 'status-dot inactive';
+            vulnDetails.textContent = `Error: ${msg}`;
+            showError(msg);
         }
     });
 
@@ -1001,7 +1717,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // Show DNS check panel
             dnsCheckStatus.style.display = 'block';
-            dnsText.textContent = 'Проверка DNS...';
+            dnsText.textContent = t('dnsScanning');
             dnsDot.className = 'status-dot';
             dnsDot.style.background = '#666666';
             dnsDomain.textContent = domain;
@@ -1071,14 +1787,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 
             // Update status
-            dnsText.textContent = '✓ DNS проверка завершена';
+            dnsText.textContent = t('dnsComplete');
             dnsDot.className = 'status-dot';
             dnsDot.classList.add('active');
             dnsContent.style.display = 'block';
 
         } catch (e) {
             console.error('DNS check error:', e);
-            dnsText.textContent = '❌ Ошибка DNS проверки';
+            dnsText.textContent = t('dnsError');
             dnsDot.className = 'status-dot inactive';
             dnsContent.style.display = 'block';
             showError('Ошибка DNS проверки: ' + e.message);
@@ -1148,11 +1864,31 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             updateStatus(result);
 
+            // Auto-trigger AI scan for Free users or if requested
+            if (currentUser && (currentUser.plan_name === 'Free' || currentUser.role_name === 'User_Free')) {
+                console.log('Auto-triggering AI scan for Free user');
+                // We use a small delay to let the basic UI update first
+                setTimeout(() => {
+                    if (aiScanBtn && isAnalyzableUrl(currentTab.url)) {
+                        aiScanBtn.click();
+                    }
+                }, 500);
+            }
+
         } catch (error) {
             console.error('Error checking URL:', error);
+
+            const errorMsg = error.message || error.toString();
+
+            // Если ошибка авторизации (401) - скрываем ошибку и переходим в режим логина
+            if (errorMsg.includes('401') || errorMsg.includes('UNAUTHORIZED') || errorMsg.includes('Сессия истекла')) {
+                setStatus('', 'hidden');
+                updateAuthUI();
+                return;
+            }
+
             setStatus('❌ Не удалось проверить страницу', 'error');
             // Проверяем, является ли ошибка проблемой подключения к локальному серверу
-            const errorMsg = error.message || error.toString();
             if (errorMsg.includes('BACKEND_NOT_RUNNING') ||
                 (errorMsg.includes('Failed to fetch') && errorMsg.includes('localhost')) ||
                 (errorMsg.includes('Failed to fetch') && errorMsg.includes('127.0.0.1'))) {
@@ -1338,17 +2074,24 @@ document.addEventListener('DOMContentLoaded', async () => {
             case 'active':
             case 'safe':
                 statusDot.classList.add('active');
+                if (statusCard) statusCard.style.display = 'block';
                 break;
             case 'inactive':
             case 'blocked':
             case 'error':
                 statusDot.classList.add('inactive');
+                if (statusCard) statusCard.style.display = 'block';
                 break;
             case 'warning':
                 statusDot.style.background = '#ffaa00';
+                if (statusCard) statusCard.style.display = 'block';
+                break;
+            case 'hidden':
+                if (statusCard) statusCard.style.display = 'none';
                 break;
             default:
                 // Для loading и других состояний
+                if (statusCard) statusCard.style.display = 'block';
                 statusDot.style.background = '#666666';
         }
     }
@@ -1393,10 +2136,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             const base = baseOk || candidates[0];
             const url = `${base}${endpoint}`;
+            const token = (await chrome.storage.local.get(['auth_token'])).auth_token;
             const options = {
                 method: data ? 'POST' : 'GET',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Authorization': token ? `Bearer ${token}` : ''
                 }
             };
 
@@ -1405,67 +2150,86 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             console.log('Making direct API call to:', url);
-            
+
             // Стандартный таймаут для всех запросов
             const timeoutDuration = 60000; // 60 секунд
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), timeoutDuration);
-            
+
             const response = await fetch(url, {
                 ...options,
                 signal: controller.signal
             });
-            
+
             clearTimeout(timeoutId);
 
+            if (response.status === 401) {
+                await logoutUser();
+                throw new Error('Сессия истекла. Пожалуйста, войдите снова.');
+            }
+
+            if (response.status === 402) {
+                const err = await response.json();
+                throw new Error(err.detail || 'Лимит сканирований исчерпан. Обновите план.');
+            }
+
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                const errText = await response.text();
+                throw new Error(errText || `HTTP error! status: ${response.status}`);
             }
 
             const result = await response.json();
-            console.log('Direct API response:', result);
-            return result;
 
+            // Refresh profile/count after scans
+            if (endpoint.includes('/check/url') || endpoint.includes('/ai/scan')) {
+                setTimeout(updateAuthUI, 500);
+            }
+
+            return result;
         } catch (error) {
             console.error('Direct API call error:', error);
-
-            // Если это ошибка сети, проверяем, это локальный сервер или внешний
             if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError') || error.message.includes('fetch failed')) {
                 throw new Error('BACKEND_NOT_RUNNING');
             }
-
             throw error;
         }
     }
 
-    // Инициализация с обработкой ошибок
     async function initializePopup() {
         try {
-            // Загружаем статистику
-            await loadStats();
+            loadingDiv.style.display = 'none';
 
-            // Проверяем текущий URL если есть вкладка
-            if (currentTab) {
-                await checkCurrentUrl(false);  // Автоматическая проверка - используем кэш
-            } else {
-                setStatus('Нет открытой страницы', 'warning');
+            // 1. Проверяем авторизацию
+            const tokenResponse = await chrome.storage.local.get([AUTH_TOKEN_KEY]);
+            const token = tokenResponse[AUTH_TOKEN_KEY];
+            await updateAuthUI();
+
+            if (!token) {
+                // Если нет токена, показываем только секцию входа (остальное будет прозрачным через updateAuthUI)
+                mainContent.style.display = 'block';
+                return;
             }
 
-            // Скрываем загрузку и показываем основной контент
-            loadingDiv.style.display = 'none';
+            // 2. Если авторизован, загружаем данные
             mainContent.style.display = 'block';
+            await loadStats();
+
+            // 3. Проверяем текущий URL
+            if (!currentTab) {
+                const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+                currentTab = tabs[0];
+            }
+
+            if (currentTab && isAnalyzableUrl(currentTab.url)) {
+                currentUrlDiv.textContent = currentTab.url;
+                await checkCurrentUrl(false);
+            }
 
         } catch (error) {
             console.error('Initialization error:', error);
             loadingDiv.style.display = 'none';
             mainContent.style.display = 'block';
-            const errorMsg = error.message || error.toString();
-            if (errorMsg.includes('Failed to fetch') || errorMsg.includes('NetworkError')) {
-                showError('⚠️ Backend сервер не запущен! Запустите сервер на http://localhost:8002');
-            } else {
-                showError('Не удалось загрузить расширение. Проверьте подключение к интернету.');
-            }
-            setStatus('❌ Ошибка загрузки', 'error');
+            showError('Ошибка загрузки расширения. Убедитесь, что бэкенд запущен.');
         }
     }
 

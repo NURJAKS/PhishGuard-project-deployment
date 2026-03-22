@@ -3,14 +3,21 @@
     "cyber-police-detailed-test.com",
     "baikonurmed.kz",
     "195.12.113.2",
-    "autoban.kz"
+    "autoban.kz",
+    "google.com",
+    "test-phish-blocking.com",
+    "www.google.com",
+    "test-openai-integration.com",
+    "openai-v2-test.com",
+    "gemini-test-priority.org",
+    "fallback-test.com",
+    "test-phishing-v4.kz"
   ],
   "whitelist_domains": [
-    "bankffin-kz.netlify.app",
     "test-whitelist-example.com",
-    "halykbank-kz.netlify.app",
     "localhost",
-    "37.140.243.198"
+    "37.140.243.198",
+    "google.com"
   ],
   "suspicious_keywords": [],
   "trusted_domains": [],

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, Request, File, UploadFile, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Depends, Request, File, UploadFile, BackgroundTasks, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse
@@ -11,9 +11,11 @@ import json
 import os
 import logging
 from typing import List, Optional
+from fastapi.security import OAuth2PasswordRequestForm
 import re
 import socket
 import time
+import uuid
 import subprocess
 import shutil
 import concurrent.futures
@@ -53,7 +55,7 @@ from schemas import (
 RoleResponse = schemas.RoleResponse
 PermissionResponse = schemas.PermissionResponse
 from models import User, Incident, PaymentCheck, InvoiceCheck, Role, Permission
-from database import get_db, create_tables
+from database import get_db, create_tables, SessionLocal
 
 # Email analysis (webmail auto-check)
 from email_analyzer import EmailAnalyzeRequest, analyze_email
@@ -62,20 +64,17 @@ from document_authenticity import (
     start_authenticity_job,
     get_job_status,
 )
+from ai_analyzer import analyze_urls_with_llm, analyze_payment_with_ai
+from payment_analyzer import analyze_payment_page, mask_pan, sha256_hex
+from secret_scanner import scan_url_for_js_secrets
+from pinkerton_integration import run_pinkerton
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 NIKTO_ROOT = BASE_DIR / "tools" / "nikto"
-NIKTO_PROGRAM = NIKTO_ROOT / "program" / "nikto.pl"
 GOBUSTER_BIN = BASE_DIR / "tools" / "gobuster" / "gobuster"
 MASSCAN_BIN = BASE_DIR / "tools" / "masscan" / "masscan"
 RIPS_ROOT = BASE_DIR / "tools" / "rips"
-RIPS_HOST = "127.0.0.1"
-RIPS_PORT = int(os.getenv("RIPS_PORT", "8090"))
-RIPS_PROCESS = None
 SITEONE_ROOT = BASE_DIR / "tools" / "siteone-crawler"
-SITEONE_BIN = SITEONE_ROOT / "crawler"
-SITEONE_REPORT_DIR = BASE_DIR / "logs" / "siteone"
-SITEONE_TIMEOUT_SEC = int(os.getenv("SITEONE_TIMEOUT_SEC", "900"))
 JSQL_ROOT = BASE_DIR / "tools" / "jsql-injection"
 JSQL_PROCESS = None
 
@@ -208,28 +207,34 @@ class URLResponse(BaseModel):
     incident_id: Optional[int] = None
 
 # Helper to seed default roles and permissions
+from models import Plan
+
 def seed_rbac(db: Session):
-    roles = ["Public", "Business", "Government", "admin_gov"]
+    # 1. Create permissions (STRICT SET)
     perms = [
-        "view_reports", "send_links", # Public
-        "manage_team", "access_analytics", # Business
-        "monitor_regions", "control_policies" # Government
+        "ai_scan", "email_check", "dns_scan", "view_dashboard", 
+        "js_scan", "vuln_scan", "document_check", "admin_panel"
     ]
     
-    # Create permissions
+    # We remove any permissions that are not in the strict set (if they exist)
+    # But for safety, we just ensure the ones we need are there.
     for p_name in perms:
         if not db.query(Permission).filter(Permission.name == p_name).first():
             db.add(Permission(name=p_name))
     db.commit()
 
-    # Create roles and associate perms
+    # 2. Create roles and associate perms STRICTLY
     role_perms_map = {
-        "Public": ["view_reports", "send_links"],
-        "Business": ["view_reports", "send_links", "manage_team", "access_analytics"],
-        "Government": ["view_reports", "send_links", "monitor_regions", "control_policies"],
-        "admin_gov": perms # All perms
+        "User_Free": ["email_check", "ai_scan", "dns_scan", "view_dashboard"],
+        "Business": ["ai_scan", "js_scan", "dns_scan", "vuln_scan", "document_check", "email_check"],
+        "admin_gov": perms # Free + Business + Admin Panel
     }
     
+    # Legacy/Required compatibility
+    if not db.query(Role).filter(Role.name == "Public").first():
+        db.add(Role(name="Public"))
+    
+    # Update roles
     for r_name, r_perms in role_perms_map.items():
         role = db.query(Role).filter(Role.name == r_name).first()
         if not role:
@@ -237,33 +242,70 @@ def seed_rbac(db: Session):
             db.add(role)
             db.commit()
             db.refresh(role)
-        
-        # Update permissions
+        # Strictly assign only the mapped permissions
         role.permissions = db.query(Permission).filter(Permission.name.in_(r_perms)).all()
+    
+    # Handle the User_Pro role if it exists (set it to minimal or remove)
+    pro_role = db.query(Role).filter(Role.name == "User_Pro").first()
+    if pro_role:
+        pro_role.permissions = [] # Clear it since it's not in the strict list
+    
     db.commit()
+
+    # 3. Create Plans
+    plans_data = [
+        {"name": "Free", "daily_limit": 9999, "has_ai": 1, "has_api": 0, "has_bulk": 0},
+        {"name": "Pro", "daily_limit": 9999, "has_ai": 1, "has_api": 0, "has_bulk": 0},
+        {"name": "Business", "daily_limit": 9999, "has_ai": 1, "has_api": 1, "has_bulk": 1},
+        {"name": "Gov", "daily_limit": 9999, "has_ai": 1, "has_api": 1, "has_bulk": 1}
+    ]
+    for p in plans_data:
+        existing_plan = db.query(Plan).filter(Plan.name == p["name"]).first()
+        if not existing_plan:
+            db.add(Plan(**p))
+        else:
+            # Update existing plan data if needed
+            existing_plan.has_ai = p["has_ai"]
+            existing_plan.daily_limit = p["daily_limit"]
+            existing_plan.has_api = p["has_api"]
+            existing_plan.has_bulk = p["has_bulk"]
+    db.commit()
+
+@app.on_event("startup")
+async def startup_event():
+    with SessionLocal() as db:
+        seed_rbac(db)
 
 # Auth ENDPOINTS
 @app.post("/auth/register", response_model=UserResponse)
 async def register(user_in: UserCreate, db: Session = Depends(get_db)):
-    db_user = db.query(User).filter(User.username == user_in.username).first()
+    # Check if username exists case-insensitively
+    db_user = db.query(User).filter(func.lower(User.username) == user_in.username.lower()).first()
     if db_user:
         raise HTTPException(status_code=400, detail="Username already registered")
     
-    # Seed RBAC if empty
+    # Ensure RBAC is seeded
     seed_rbac(db)
     
-    # Default role logic
-    default_role_name = "Public"
-    if user_in.sector == "Business":
-        # Business role requires corporate email verification (simulated here)
-        if not user_in.email or "@" not in user_in.email:
-            raise HTTPException(status_code=400, detail="Corporate email required for Business sector")
-        default_role_name = "Business" # In real app, start as Public or pending
-    elif user_in.sector == "Government":
-        # Government role is restricted
-        default_role_name = "Public" # Must be upgraded by admin
+    # Default assignments
+    role_name = "User_Free"
+    plan_name = "Free"
+    status = "active"
+    is_verified = 0
+
+    if user_in.username.lower() == "admin" or user_in.sector == "Government":
+        role_name = "admin_gov"
+        plan_name = "Gov"
+        status = "active"
+        is_verified = 1
+    elif user_in.sector == "Business":
+        role_name = "Business"
+        plan_name = "Business"
+        status = "active"
+        is_verified = 1
     
-    role = db.query(Role).filter(Role.name == default_role_name).first()
+    role = db.query(Role).filter(Role.name == role_name).first()
+    plan = db.query(Plan).filter(Plan.name == plan_name).first()
     
     hashed_pw = get_password_hash(user_in.password)
     new_user = User(
@@ -271,26 +313,61 @@ async def register(user_in: UserCreate, db: Session = Depends(get_db)):
         email=user_in.email,
         hashed_password=hashed_pw,
         role_id=role.id if role else None,
+        plan_id=plan.id if plan else None,
         sector=user_in.sector,
-        status="active" if user_in.sector == "Public" else "pending"
+        status=status,
+        is_verified=is_verified
     )
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
     
-    # Set role_name for response
+    # Prepare response
     new_user.role_name = role.name if role else "None"
+    new_user.plan_name = plan.name if plan else "None"
     return new_user
 
 @app.post("/auth/login", response_model=Token)
 async def login(user_in: UserCreate, db: Session = Depends(get_db)):
+    # Lookup user: try exact match first, then case-insensitive fallback
     user = db.query(User).filter(User.username == user_in.username).first()
+    if not user:
+        user = db.query(User).filter(func.lower(User.username) == user_in.username.lower()).first()
+    
     if not user or not verify_password(user_in.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Incorrect username or password")
     
     access_token = create_access_token(data={"sub": user.username})
     role_name = user.user_role.name if user.user_role else "Public"
     return {"access_token": access_token, "token_type": "bearer", "role": role_name}
+
+@app.post("/auth/token", response_model=Token)
+async def login_for_access_token(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db)
+):
+    """Стандартный OAuth2 эндпоинт для входа (используется расширением)"""
+    # Lookup user: try exact match first, then case-insensitive fallback
+    user = db.query(User).filter(User.username == form_data.username).first()
+    if not user:
+        user = db.query(User).filter(func.lower(User.username) == form_data.username.lower()).first()
+    
+    if not user or not verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Неверное имя пользователя или пароль",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    access_token = create_access_token(data={"sub": user.username})
+    role_name = user.user_role.name if user.user_role else "Public"
+    return {"access_token": access_token, "token_type": "bearer", "role": role_name}
+
+@app.get("/auth/me", response_model=UserResponse)
+async def get_me(current_user: User = Depends(get_current_user)):
+    current_user.role_name = current_user.user_role.name if current_user.user_role else "None"
+    current_user.plan_name = current_user.plan.name if current_user.plan else "None"
+    return current_user
 
 # RBAC & USER MANAGEMENT ENDPOINTS
 @app.get("/admin/users", response_model=List[UserResponse])
@@ -307,6 +384,7 @@ async def list_users(
     users = query.all()
     for u in users:
         u.role_name = u.user_role.name if u.user_role else "None"
+        u.plan_name = u.plan.name if u.plan else "None"
     return users
 
 @app.patch("/admin/users/{user_id}/role")
@@ -326,18 +404,14 @@ async def update_user_role(
         raise HTTPException(status_code=400, detail="Роль не существует")
     
     # Specific logic for Government role
-    if role.name == "Government" and admin.user_role.name != "admin_gov":
-         raise HTTPException(status_code=403, detail="Только супер-админ может назначить роль Government")
+    if role.name == "admin_gov" and admin.user_role.name != "admin_gov":
+         raise HTTPException(status_code=403, detail="Только супер-админ может назначить роль admin_gov")
 
     user.role_id = role.id
-    if role.name in ["Business", "Government"]:
+    if role.name in ["Business", "admin_gov"]:
         user.is_verified = 1
     
     db.commit()
-    # Invalidate Redis cache
-    if redis_client:
-        redis_client.delete(f"user_perms:{user.id}")
-        
     return {"success": True, "user_id": user.id, "new_role": role.name}
 
 @app.get("/admin/roles", response_model=List[RoleResponse])
@@ -514,13 +588,46 @@ def send_tg_auto_report(domain, reason, incident_id=None, ts=None):
     except Exception:
         pass
 
+def send_tg_auto_report_extended(msg: str):
+    import requests as py_requests
+    TELEGRAM_BOT_TOKEN = "7972590264:AAFvTfbFqyaBS1lLK5W6EWrPEsVh5-KAM58"
+    TELEGRAM_CHAT_ID = "-1003297580651"
+    send_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": msg,
+        "parse_mode": "HTML"
+    }
+    try:
+        py_requests.post(send_url, json=payload, timeout=15)
+    except Exception:
+        pass
+
 @app.post("/v1/check/url", response_model=URLResponse)
 async def check_url(
     request: URLRequest, 
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: User = Depends(RoleChecker(["free"]))
+    current_user: User = Depends(RoleChecker(["User_Free", "User_Pro", "Business", "admin_gov"]))
 ):
     """Проверяет URL на фишинг и мошенничество"""
+    
+    # 1. Check Daily Limits
+    if current_user.plan:
+        # Reset count if it's a new day
+        now = datetime.now()
+        if not current_user.last_scan_date or current_user.last_scan_date.date() < now.date():
+            current_user.daily_scans_count = 0
+            current_user.last_scan_date = now
+            
+        if current_user.daily_scans_count >= current_user.plan.daily_limit:
+            raise HTTPException(
+                status_code=402, 
+                detail=f"Лимит сканирований исчерпан ({current_user.plan.daily_limit}/день). Пожалуйста, обновите план."
+            )
+        
+        current_user.daily_scans_count += 1
+        db.commit()
     
     # Перезагружаем правила для использования актуального blacklist
     global rules
@@ -549,12 +656,12 @@ async def check_url(
 
     def format_ai_report(ai):
         block = []
-        block.append(f"▶️ <b>Риск по ИИ:</b> <b>{ai.get('risk')}</b>")
+        block.append(f"▶️ <b>Риск:</b> <b>{ai.get('risk')}</b>")
         if ai.get('provider'):
             block.append(f"<b>Провайдер анализа:</b> {ai.get('provider')}")
         reasons = ai.get('reasons') or []
         if reasons:
-            block.append("<b>Причины (ИИ):</b>")
+            block.append("<b>Причины:</b>")
             for idx, r in enumerate(reasons, 1):
                 block.append(f"    {idx}) {r}")
         return '\n'.join(block)
@@ -596,25 +703,13 @@ async def check_url(
                 f"\n<b>ИИ-Анализ сайта:</b>\n{ai_block}\n"
                 "---\nКонтакт: @your_admin_for_cyber (бот) | PhishGuard\n"
             )
-            import requests as py_requests
-            TELEGRAM_BOT_TOKEN = "7972590264:AAFvTfbFqyaBS1lLK5W6EWrPEsVh5-KAM58"
-            TELEGRAM_CHAT_ID = "-1003297580651"
-            send_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-            payload = {
-                "chat_id": TELEGRAM_CHAT_ID,
-                "text": msg,
-                "parse_mode": "HTML"
-            }
-            try:
-                py_requests.post(send_url, json=payload, timeout=15)
-            except Exception:
-                pass
+            background_tasks.add_task(send_tg_auto_report_extended, msg)
         else:
             # Если домен уже есть в ЧС — как раньше, но не дублировать report в TG каждый раз
             today_str = datetime.now().strftime('%Y-%m-%d')
             exists = db.query(Incident).filter(Incident.action == "block").filter(Incident.url.contains(domain)).filter(Incident.timestamp >= today_str).first()
             if not exists:
-                send_tg_auto_report(domain=domain, reason=analysis["reason"], incident_id=incident.id, ts=incident.timestamp.strftime('%Y-%m-%d %H:%M:%S'))
+                background_tasks.add_task(send_tg_auto_report, domain=domain, reason=analysis["reason"], incident_id=incident.id, ts=incident.timestamp.strftime('%Y-%m-%d %H:%M:%S'))
 
     return URLResponse(
         action=analysis["action"],
@@ -692,6 +787,30 @@ async def analyze_payment(
     current_user: User = Depends(RoleChecker(["free"]))
 ):
     url = req.url or ""
+    
+    # 1. ПРИОРИТЕТНАЯ ПРОВЕРКА БЕЛОГО СПИСКА (WHITELIST)
+    # Если домен в белом списке, сразу возвращаем "безопасно"
+    from urllib.parse import urlparse
+    parsed = urlparse(url)
+    domain = parsed.netloc.lower()
+    
+    # Загружаем актуальные правила из файла
+    current_rules = load_rules()
+    whitelist = current_rules.get("whitelist_domains", [])
+    
+    is_whitelisted = False
+    for whitelisted in whitelist:
+        whitelisted_lower = whitelisted.lower().strip()
+        # Проверяем точное совпадение или поддомен
+        if domain == whitelisted_lower or domain.endswith('.' + whitelisted_lower):
+            is_whitelisted = True
+            break
+            
+    # ВАЖНО: белый список больше НЕ делает мгновенный вердикт "безопасно".
+    # Он лишь добавляет пометку в объяснение, а итог определяется анализом (rules + AI).
+    if is_whitelisted:
+        logging.info(f"[PAYMENT] URL {url} is WHITELISTED. Continuing analysis (no short-circuit).")
+
     html_snippet = (req.html_snippet or "")[:30000]
     # Маскируем перед любыми вычислениями/сохранением
     masked = mask_pan(html_snippet)
@@ -763,6 +882,14 @@ async def analyze_payment(
             "provider": "none"
         }
 
+    # Добавляем информацию о белом списке (если совпало), но не подменяем вердикт.
+    if is_whitelisted:
+        result["explain"]["whitelist"] = {
+            "matched": True,
+            "domain": domain,
+            "note": "Домен найден в белом списке, но анализ всё равно выполнен. Если вердикт кажется неверным — проверьте актуальность белого списка."
+        }
+
     parsed = urlparse(url)
     domain = parsed.netloc.lower() if parsed and parsed.netloc else None
 
@@ -819,20 +946,27 @@ class AiScanRequest(BaseModel):
 @app.post("/v1/ai/scan")
 async def ai_scan(
     req: AiScanRequest,
-    current_user: User = Depends(RoleChecker(["free"]))
+    current_user: User = Depends(RoleChecker(["User_Free", "Public", "User_Pro", "Business", "admin_gov"]))
 ):
-    """LLM-based risk analysis using OpenRouter (set OPENROUTER_API_KEY)."""
+    """LLM-based risk analysis. Requires Pro or Business plan."""
+    if not current_user.plan or not current_user.plan.has_ai:
+        raise HTTPException(status_code=403, detail="Ваш план не поддерживает AI-сканирование")
+        
     try:
         if not req.urls or len(req.urls) == 0:
-            raise HTTPException(status_code=400, detail="URLs list is empty")
+            raise HTTPException(status_code=400, detail="Список URL пуст")
         
+        # Limit to 1 URL for individual Pro users if they try to bulk scan
+        if len(req.urls) > 1 and current_user.user_role.name == "User_Pro":
+             raise HTTPException(status_code=403, detail="Массовое сканирование доступно только для Бизнес-плана")
+
         result = analyze_urls_with_llm(req.urls)
         return result
     except HTTPException:
         raise
     except Exception as e:
         logging.error(f"[AI SCAN] Error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"AI scan error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Ошибка AI-сканирования: {str(e)}")
 
 
 class VulnScanRequest(BaseModel):
@@ -1052,7 +1186,10 @@ def _clean_gobuster_output(raw_output: str, wordlist_path: str, target_url: str)
 
 
 @app.post("/v1/vuln/nikto", response_model=VulnScanResponse)
-async def nikto_vuln_scan(req: VulnScanRequest):
+async def nikto_vuln_scan(
+    req: VulnScanRequest,
+    current_user: User = Depends(RoleChecker(["Business", "admin_gov"]))
+):
     """Запускает локальный Nikto против указанного URL и возвращает stdout/stderr."""
     target = _validate_scan_url(req.url)
     
@@ -1132,7 +1269,7 @@ async def nikto_vuln_scan(req: VulnScanRequest):
 @app.post("/v1/vuln/gobuster", response_model=VulnScanResponse)
 async def gobuster_dir_scan(
     req: GobusterScanRequest,
-    current_user: User = Depends(RoleChecker(["gov"]))
+    current_user: User = Depends(RoleChecker(["Business", "admin_gov"]))
 ):
     """Запускает Gobuster dir scan против указанного URL."""
     target = _validate_scan_url(req.url)
@@ -1281,7 +1418,7 @@ def _ensure_jsql_available() -> tuple[str, Path]:
 @app.post("/v1/vuln/jsdirbuster", response_model=VulnScanResponse)
 async def jsdirbuster_scan(
     req: JSDirbusterScanRequest,
-    current_user: User = Depends(RoleChecker(["gov"]))
+    current_user: User = Depends(RoleChecker(["Business", "admin_gov"]))
 ):
     """Запускает JSDirbuster scan против указанного URL."""
     target = _validate_scan_url(req.url)
@@ -1325,7 +1462,7 @@ async def jsdirbuster_scan(
 async def siteone_crawler_run(
     req: CrawlerScanRequest, 
     request: Request,
-    current_user: User = Depends(RoleChecker(["gov"]))
+    current_user: User = Depends(RoleChecker(["Business", "admin_gov"]))
 ):
     """Запускает SiteOne Crawler и возвращает ссылку на HTML отчет."""
     target = _validate_scan_url(req.url)
@@ -1402,7 +1539,9 @@ async def siteone_report(report_id: str):
 
 
 @app.post("/v1/tools/jsql/start")
-async def jsql_start():
+async def jsql_start(
+    current_user: User = Depends(RoleChecker(["Business", "admin_gov"]))
+):
     """Запуск jSQL Injection (GUI)."""
     global JSQL_PROCESS
     java_bin, jar_path = _ensure_jsql_available()
@@ -1430,7 +1569,9 @@ async def jsql_start():
 
 
 @app.post("/v1/tools/rips/start")
-async def start_rips_server():
+async def start_rips_server(
+    current_user: User = Depends(RoleChecker(["Business", "admin_gov"]))
+):
     """Запуск локального RIPS (PHP static analyzer) через встроенный PHP сервер."""
     return _ensure_rips_server_running()
 
@@ -2811,12 +2952,12 @@ async def telegram_report(
     ai = ai_report["items"][0] if ai_report and ai_report.get("items") else {}
     def format_ai_report(ai):
         block = []
-        block.append(f"▶️ <b>Риск по ИИ:</b> <b>{ai.get('risk')}</b>")
+        block.append(f"▶️ <b>Риск:</b> <b>{ai.get('risk')}</b>")
         if ai.get('provider'):
             block.append(f"<b>Провайдер анализа:</b> {ai.get('provider')}")
         reasons = ai.get('reasons') or []
         if reasons:
-            block.append("<b>Причины по анализу ИИ:</b>")
+            block.append("<b>Причины:</b>")
             for idx, r in enumerate(reasons, 1):
                 block.append(f"    {idx}) {r}")
         return '\n'.join(block)
