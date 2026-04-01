@@ -284,24 +284,24 @@ HTML (первые 15000 символов):
     result = None
     provider_used = "none"
     
-    # 1. Сначала пробуем Gemini (если есть ключ)
-    if has_valid_google_key:
-        logger.info(f"[PAYMENT AI] Attempting Google AI Studio...")
-        result = _google_ai_analyze_payment(prompt_text, url)
-        if result:
-            provider_used = "google"
-        else:
-            logger.warning(f"[PAYMENT AI] Google AI failed, falling back...")
-    
-    # 2. Если Gemini не сработал, пробуем OpenAI (если есть ключ)
-    if not result and has_openai_key:
-        logger.info(f"[PAYMENT AI] Attempting OpenAI fallback...")
+    # 1. Сначала пробуем OpenAI (если есть ключ) - ТЕПЕРЬ ПРИОРИТЕТ
+    if has_openai_key:
+        logger.info(f"[PAYMENT AI] Attempting OpenAI as primary provider...")
         result = _openai_analyze_payment(prompt_text, url)
         if result:
             provider_used = "openai"
         else:
-            logger.warning(f"[PAYMENT AI] OpenAI fallback failed...")
+            logger.warning(f"[PAYMENT AI] OpenAI primary failed, falling back...")
             
+    # 2. Если OpenAI не сработал или нет ключа, пробуем Gemini (если есть ключ)
+    if not result and has_valid_google_key:
+        logger.info(f"[PAYMENT AI] Attempting Google AI Studio fallback...")
+        result = _google_ai_analyze_payment(prompt_text, url)
+        if result:
+            provider_used = "google"
+        else:
+            logger.warning(f"[PAYMENT AI] Google AI fallback failed...")
+    
     # 3. Если ничего не сработало, пробуем OpenRouter (если есть ключ)
     if not result and has_openrouter_key:
         logger.info(f"[PAYMENT AI] Attempting OpenRouter fallback...")
@@ -536,23 +536,23 @@ def _analyze_with_llm(url: str, html_excerpt: str, js_urls: List[str]) -> Dict[s
     result = None
     provider_used = "none"
     
-    # 1. Gemini
-    if has_valid_google_key:
-        logger.info(f"[SCAN STEP 3] Attempting Google AI Studio...")
-        result = _google_ai_analyze(prompt, url)
-        if result:
-            provider_used = "google"
-        else:
-            logger.warning(f"[SCAN STEP 3] Google AI failed, falling back...")
-            
-    # 2. OpenAI
-    if not result and has_openai_key:
-        logger.info(f"[SCAN STEP 3] Attempting OpenAI fallback...")
+    # 1. OpenAI - ТЕПЕРЬ ПРИОРИТЕТ
+    if has_openai_key:
+        logger.info(f"[SCAN STEP 3] Attempting OpenAI as primary provider...")
         result = _openai_analyze(prompt, url)
         if result:
             provider_used = "openai"
         else:
-            logger.warning(f"[SCAN STEP 3] OpenAI fallback failed...")
+            logger.warning(f"[SCAN STEP 3] OpenAI primary failed, falling back...")
+
+    # 2. Gemini
+    if not result and has_valid_google_key:
+        logger.info(f"[SCAN STEP 3] Attempting Google AI Studio fallback...")
+        result = _google_ai_analyze(prompt, url)
+        if result:
+            provider_used = "google"
+        else:
+            logger.warning(f"[SCAN STEP 3] Google AI fallback failed...")
             
     # 3. OpenRouter
     if not result and has_openrouter_key:
@@ -612,28 +612,29 @@ def analyze_url_full_audit(url: str) -> Dict[str, Any]:
         "status_code": status_code
     }
     
-    # Выполняем полный AI аудит (приоритет Gemini -> OpenAI)
-    google_api_key = os.getenv("GOOGLE_API_KEY", DEFAULT_GOOGLE_API_KEY)
-    has_valid_google_key = google_api_key and google_api_key != DEFAULT_GOOGLE_API_KEY and google_api_key.strip() != ""
+    # Выполняем полный AI аудит (ПРИОРИТЕТ OpenAI -> Gemini)
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+    has_openai_key = openai_api_key and openai_api_key.strip() != ""
     
     result = None
     
-    # 1. Gemini
-    if has_valid_google_key and GOOGLE_AVAILABLE:
-        logger.info(f"[FULL AUDIT] Attempting Google AI Studio...")
-        result = _google_ai_full_audit(audit_data, url)
+    # 1. OpenAI - ТЕПЕРЬ ПРИОРИТЕТ
+    if has_openai_key and OPENAI_AVAILABLE:
+        logger.info(f"[FULL AUDIT] Attempting OpenAI as primary provider...")
+        result = _openai_full_audit(audit_data, url)
         if "error" in result:
-            logger.warning(f"[FULL AUDIT] Google AI failed: {result['error']}, falling back...")
+            logger.warning(f"[FULL AUDIT] OpenAI primary failed: {result['error']}, falling back...")
             result = None
             
-    # 2. OpenAI
+    # 2. Gemini
     if not result:
-        openai_api_key = os.getenv("OPENAI_API_KEY")
-        if openai_api_key and openai_api_key.strip() != "" and OPENAI_AVAILABLE:
-            logger.info(f"[FULL AUDIT] Attempting OpenAI fallback...")
-            result = _openai_full_audit(audit_data, url)
+        google_api_key = os.getenv("GOOGLE_API_KEY", DEFAULT_GOOGLE_API_KEY)
+        has_valid_google_key = google_api_key and google_api_key != DEFAULT_GOOGLE_API_KEY and google_api_key.strip() != ""
+        if has_valid_google_key and GOOGLE_AVAILABLE:
+            logger.info(f"[FULL AUDIT] Attempting Google AI Studio fallback...")
+            result = _google_ai_full_audit(audit_data, url)
             if "error" in result:
-                logger.warning(f"[FULL AUDIT] OpenAI fallback failed: {result['error']}")
+                logger.warning(f"[FULL AUDIT] Google AI fallback failed: {result['error']}")
                 result = None
     
     if not result:

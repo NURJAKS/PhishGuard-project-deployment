@@ -11,6 +11,23 @@ env/
 .env.*
 *.sqlite3
 *.db
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 
 # Node.js
 node_modules/
@@ -21,13 +38,20 @@ pnpm-debug.log*
 lerna-debug.log*
 frontend/dist/
 extension/dist/
+.next/
+out/
+.nuxt/
+.vercel/
 
 # OS / Editor
 .vscode/
 .idea/
 .DS_Store
+Thumbs.db
 *.swp
 *~
+*.sublime-project
+*.sublime-workspace
 
 # Logs
 *.log

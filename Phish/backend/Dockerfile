@@ -5,6 +5,10 @@ WORKDIR /app
 # Установка системных зависимостей
 RUN apt-get update && apt-get install -y \
     gcc \
+    libcap2-bin \
+    nmap \
+    curl \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Копирование requirements и установка Python зависимостей

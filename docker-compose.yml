@@ -1,0 +1,31 @@
+services:
+  backend:
+    build:
+      context: ./Phish/backend
+    container_name: phishguard-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./Phish/backend/database:/app/database
+      - ./Phish/tools:/app/tools
+    env_file:
+      - .env
+    restart: always
+
+  dashboard:
+    build:
+      context: ./Phish/dashboard
+    container_name: phishguard-dashboard
+    ports:
+      - "8501:8501"
+    environment:
+      - API_BASE_URL=http://backend:8000
+    depends_on:
+      - backend
+    restart: always
+
+  pinkerton:
+    build:
+      context: ./Pinkerton
+    container_name: phishguard-pinkerton
+    restart: always
