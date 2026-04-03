@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "PhishGuard",
   "short_name": "PhishGuard",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "description": "Защита от фишинга и мошеннических сайтов",
   "permissions": [
     "activeTab",
@@ -14,8 +14,7 @@
     "notifications"
   ],
   "host_permissions": [
-    "http://localhost:8002/*",
-    "http://127.0.0.1:8002/*",
+    "https://phishguard.ddns.net/*",
     "https://*/*",
     "http://*/*",
     "https://cloudflare-dns.com/*",
@@ -26,7 +25,7 @@
     "service_worker": "background.js"
   },
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' http://localhost:* http://127.0.0.1:* https://cloudflare-dns.com https://dns.google https://ipinfo.io; img-src 'self' data:; style-src 'self' 'unsafe-inline'"
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://phishguard.ddns.net http://localhost:* http://127.0.0.1:* https://cloudflare-dns.com https://dns.google https://ipinfo.io; img-src 'self' data:; style-src 'self' 'unsafe-inline'"
   },
   "content_scripts": [
     {

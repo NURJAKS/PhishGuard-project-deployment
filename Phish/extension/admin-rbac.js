@@ -1,5 +1,5 @@
 
-const API_URL = "http://localhost:8002";
+const API_URL = "https://phishguard.ddns.net";
 let currentSector = 'Public';
 let allRoles = [];
 let allPermissions = [];

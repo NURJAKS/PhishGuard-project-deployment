@@ -9,8 +9,9 @@ async function getAuthToken() {
 
 // Конфигурация
 const API_BASE_CANDIDATES = [
-  'http://127.0.0.1:8002',
-  'http://localhost:8002'
+  'https://phishguard.ddns.net',
+  'http://localhost:8000',
+  'http://127.0.0.1:8000'
 ];
 let RESOLVED_API_BASE = null;
 async function resolveApiBase() {

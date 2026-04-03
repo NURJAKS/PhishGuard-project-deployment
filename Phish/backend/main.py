@@ -123,6 +123,139 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Главная страница (Dashboard / Landing)
+@app.get("/", response_class=HTMLResponse)
+async def read_root():
+    """Служит главной страницей или лендингом для комплаенса Google"""
+    # 1. Попытка отдать dashboard.html если он существует
+    possible_paths = [
+        Path("dashboard.html"),
+        Path("static/dashboard.html"),
+        Path("../extension/dashboard.html"),
+        Path("Phish/extension/dashboard.html")
+    ]
+    
+    for path in possible_paths:
+        try:
+            if path.exists():
+                with open(path, "r", encoding="utf-8") as f:
+                    return HTMLResponse(content=f.read())
+        except Exception:
+            continue
+            
+    # 2. Если dashboard.html не найден, отдаем профессиональный лендинг (для Google Web Store)
+    return HTMLResponse(content="""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PhishGuard AI | Advanced Phishing Protection</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #4F46E5;
+            --accent: #06B6D4;
+            --bg: #0F172A;
+            --text: #F8FAFC;
+        }
+        body {
+            margin: 0;
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+            background: radial-gradient(circle at top left, #1e293b, #0f172a);
+        }
+        .container {
+            text-align: center;
+            padding: 2rem;
+            max-width: 800px;
+            animation: fadeIn 1.2s ease-out;
+        }
+        h1 {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, #818CF8, #22D3EE);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+        }
+        p {
+            font-size: 1.25rem;
+            line-height: 1.6;
+            color: #94A3B8;
+            margin-bottom: 2.5rem;
+        }
+        .badge {
+            display: inline-block;
+            padding: 0.5rem 1.2rem;
+            background: rgba(129, 140, 248, 0.1);
+            border: 1px solid rgba(129, 140, 248, 0.2);
+            border-radius: 50px;
+            font-size: 0.875rem;
+            color: #818CF8;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+        .btn {
+            display: inline-block;
+            padding: 1rem 2rem;
+            background: var(--primary);
+            color: white;
+            text-decoration: none;
+            border-radius: 12px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.3);
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 20px 25px -5px rgba(79, 70, 229, 0.4);
+            background: #4338CA;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        /* Subtle Glow */
+        .glow {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 400px;
+            height: 400px;
+            background: var(--primary);
+            filter: blur(150px);
+            opacity: 0.15;
+            z-index: -1;
+            transform: translate(-50%, -50%);
+        }
+    </style>
+</head>
+<body>
+    <div class="glow"></div>
+    <div class="container">
+        <div class="badge">Next-Gen Cyber Security</div>
+        <h1>PhishGuard AI</h1>
+        <p>
+            Protecting your digital footprint with real-time AI analysis. 
+            PhishGuard detects fraudulent websites, scams, and phishing attempts 
+            before you even click.
+        </p>
+        <a href="/documents" class="btn">Manage Documents</a>
+    </div>
+</body>
+</html>
+    """)
+
 # Создаем таблицы при запуске
 create_tables()
 
@@ -574,8 +707,8 @@ def analyze_url(url: str) -> dict:
 def send_tg_auto_report(domain, reason, incident_id=None, ts=None):
     import requests as py_requests
     from datetime import datetime
-    TELEGRAM_BOT_TOKEN = "7972590264:AAFvTfbFqyaBS1lLK5W6EWrPEsVh5-KAM58"
-    TELEGRAM_CHAT_ID = "-1003297580651"
+    TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "7972590264:AAFvTfbFqyaBS1lLK5W6EWrPEsVh5-KAM58")
+    TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "-1003297580651")
     msg = f"\u26a0\ufe0f <b>Автожалоба на опасный сайт (AI/HTTP)</b>\n---\n<b>Домен:</b> <code>{domain}</code>\n<b>Причина:</b> {reason}\n<b>ID инцидента:</b> {incident_id or '-'}\n<b>Время:</b> {ts or datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
     send_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {
@@ -590,8 +723,8 @@ def send_tg_auto_report(domain, reason, incident_id=None, ts=None):
 
 def send_tg_auto_report_extended(msg: str):
     import requests as py_requests
-    TELEGRAM_BOT_TOKEN = "7972590264:AAFvTfbFqyaBS1lLK5W6EWrPEsVh5-KAM58"
-    TELEGRAM_CHAT_ID = "-1003297580651"
+    TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "7972590264:AAFvTfbFqyaBS1lLK5W6EWrPEsVh5-KAM58")
+    TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "-1003297580651")
     send_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {
         "chat_id": TELEGRAM_CHAT_ID,
@@ -2218,7 +2351,7 @@ async def upload_document(file: UploadFile = File(...)):
         
         # Генерируем публичную ссылку
         # В продакшене используйте реальный домен
-        base_url = os.getenv("BASE_URL", "http://localhost:8002")
+        base_url = os.getenv("BASE_URL", "https://phishguard.ddns.net")
         share_url = f"{base_url}/v1/document/share/{doc_id}"
         
         logging.info(f"Document uploaded: {original_filename} -> {doc_id}")
@@ -2409,7 +2542,7 @@ async def get_document_info(doc_id: str):
             metadata = json.load(f)
         
         # Не возвращаем полный путь к файлу, только публичную информацию
-        base_url = os.getenv("BASE_URL", "http://localhost:8002")
+        base_url = os.getenv("BASE_URL", "https://phishguard.ddns.net")
         share_url = f"{base_url}/v1/document/share/{doc_id}"
         
         return {
@@ -2482,7 +2615,7 @@ async def list_documents():
     """Получить список всех загруженных документов"""
     try:
         documents = []
-        base_url = os.getenv("BASE_URL", "http://localhost:8002")
+        base_url = os.getenv("BASE_URL", "https://phishguard.ddns.net")
         
         # Сканируем директорию с документами
         if DOCUMENTS_DIR.exists():
@@ -2920,8 +3053,8 @@ async def set_auto_scan_status(
         "message": f"Автосканирование {'включено' if req.enabled else 'выключено'}"
     }
 
-TELEGRAM_BOT_TOKEN = "7972590264:AAFvTfbFqyaBS1lLK5W6EWrPEsVh5-KAM58"
-TELEGRAM_CHAT_ID = "-1003297580651"
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "7972590264:AAFvTfbFqyaBS1lLK5W6EWrPEsVh5-KAM58")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "-1003297580651")
 
 class TelegramReportRequest(BaseModel):
     domain: str
@@ -2981,8 +3114,8 @@ async def telegram_report(
         f"{ai_block}\n"
         f"---\nКонтакт: @your_admin_for_cyber (бот) | PhishGuard\n"
     )
-    TELEGRAM_BOT_TOKEN = "7972590264:AAFvTfbFqyaBS1lLK5W6EWrPEsVh5-KAM58"
-    TELEGRAM_CHAT_ID = "-1003297580651"
+    TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "7972590264:AAFvTfbFqyaBS1lLK5W6EWrPEsVh5-KAM58")
+    TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "-1003297580651")
     send_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {
         "chat_id": TELEGRAM_CHAT_ID,
@@ -3002,6 +3135,6 @@ async def telegram_report(
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8002)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
 
 

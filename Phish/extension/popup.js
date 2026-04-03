@@ -436,7 +436,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let currentUser = null;
 
     async function getApiBase() {
-        return 'http://127.0.0.1:8002'; // Default for extension
+        return 'https://phishguard.ddns.net'; // Production for extension
     }
 
     async function updateAuthUI() {
@@ -772,9 +772,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 1200);
-            await fetch('http://localhost:8501/healthz', { method: 'GET', mode: 'no-cors', signal: controller.signal });
+            await fetch('https://phishguard.ddns.net/healthz', { method: 'GET', mode: 'no-cors', signal: controller.signal });
             clearTimeout(timeoutId);
-            chrome.tabs.create({ url: 'http://localhost:8501' });
+            chrome.tabs.create({ url: 'https://phishguard.ddns.net' });
             return;
         } catch (e) {
             // Фоллбэк: локальная страница внутри расширения
@@ -787,7 +787,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         upgradePlanBtn.addEventListener('click', () => {
             // Аналогично Dashboard, пробуем сначала Streamlit
             try {
-                chrome.tabs.create({ url: 'http://localhost:8501' });
+                chrome.tabs.create({ url: 'https://phishguard.ddns.net' });
             } catch (e) {
                 const localDashboardUrl = chrome.runtime.getURL('dashboard.html');
                 chrome.tabs.create({ url: localDashboardUrl });
@@ -801,7 +801,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     openDocumentsBtn.addEventListener('click', () => {
-        chrome.tabs.create({ url: 'http://localhost:8002/documents' });
+        chrome.tabs.create({ url: 'https://phishguard.ddns.net/documents' });
     });
 
     // SQL button handler - через background.js
@@ -1160,7 +1160,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             const htmlFull = await getPageHtml(currentTab.id);
             const snippet = maskPan(htmlFull).slice(0, 30000);
-            const candidates = ['http://localhost:8002', 'http://127.0.0.1:8002'];
+            const candidates = ['https://phishguard.ddns.net', 'http://localhost:8000', 'http://127.0.0.1:8000'];
             let base = candidates[0];
             for (const b of candidates) {
                 try {
@@ -1241,7 +1241,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         secretLinksSection.style.display = 'none';
         secretLinks.textContent = '';
         try {
-            const candidates = ['http://localhost:8002', 'http://127.0.0.1:8002'];
+            const candidates = ['https://phishguard.ddns.net', 'http://localhost:8000', 'http://127.0.0.1:8000'];
             let base = candidates[0];
             for (const b of candidates) {
                 try {
@@ -1322,7 +1322,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             secretText.textContent = t('failedScan');
             secretDot.className = 'status-dot inactive';
             if (errorMsg.includes('Failed to fetch') || errorMsg.includes('NetworkError')) {
-                secretSummary.textContent = '⚠️ Backend сервер не запущен! Запустите сервер на http://localhost:8002';
+                secretSummary.textContent = '⚠️ Backend сервер не запущен! Запустите сервер на https://phishguard.ddns.net или http://localhost:8000';
             } else {
                 secretSummary.textContent = 'Попробуйте позже или проверьте подключение к интернету';
             }
@@ -1338,7 +1338,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         aiDot.style.background = '#666666';
         aiDetails.textContent = '';
         try {
-            const candidates = ['http://localhost:8002', 'http://127.0.0.1:8002'];
+            const candidates = ['https://phishguard.ddns.net', 'http://localhost:8000', 'http://127.0.0.1:8000'];
             let base = candidates[0];
             for (const b of candidates) {
                 try {
@@ -1502,7 +1502,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             aiText.textContent = '❌ Failed to scan site';
             aiDot.className = 'status-dot inactive';
             if (errorMsg.includes('Failed to fetch') || errorMsg.includes('NetworkError') || errorMsg.includes('fetch failed')) {
-                aiDetails.textContent = '⚠️ Backend сервер не запущен! Запустите сервер на http://localhost:8002';
+                aiDetails.textContent = '⚠️ Backend сервер не запущен! Запустите сервер на https://phishguard.ddns.net или http://localhost:8000';
             } else if (errorMsg.includes('HTTP error! status: 500')) {
                 aiDetails.textContent = '⚠️ Ошибка на сервере (500). Проверьте логи backend сервера или попробуйте позже.';
             } else if (errorMsg.includes('HTTP error! status: 400')) {
@@ -1940,7 +1940,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const cacheCleared = (cacheResult && cacheResult.cleared) || 0;
 
             // Очищаем базу данных incidents
-            const candidates = ['http://localhost:8002', 'http://127.0.0.1:8002'];
+            const candidates = ['https://phishguard.ddns.net', 'http://localhost:8000', 'http://127.0.0.1:8000'];
             let base = candidates[0];
             for (const b of candidates) {
                 try {
@@ -2122,7 +2122,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Fallback функция для прямого обращения к API
     async function directApiCall(endpoint, data = null) {
         try {
-            const candidates = ['http://localhost:8002', 'http://127.0.0.1:8002'];
+            const candidates = ['https://phishguard.ddns.net', 'http://localhost:8000', 'http://127.0.0.1:8000'];
             let baseOk = null;
             for (const base of candidates) {
                 try {

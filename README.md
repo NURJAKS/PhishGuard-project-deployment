@@ -1,68 +1,64 @@
-# 🛡️ PhishGuard AI
+# 🛡️ PhishGuard AI - Advanced Protection Platform
 
-A modern AI-powered phishing defense system that acts as a smart guard in your browser. It automatically analyzes websites in real-time to alert you of suspicious or malicious activity.
+PhishGuard AI is an advanced security platform designed to protect users from phishing, malware, and other web threats using Artificial Intelligence and a suite of powerful security tools.
 
-## ✨ Features
+---
 
-- **Real-time Protection**: Actively blocks dangerous sites as you browse.
-- **Smart AI Analysis**: Utilizes Generative AI to identify complex phishing patterns.
-- **Payment Security**: Inspects payment pages to ensure your card details remain safe.
-- **Document Scanning**: Analyzes PDFs and other documents for fraudulent links or data.
-- **Security Tools**: Built-in port scanning, secrets scanning, and directory fuzzing.
+## 🚀 Deployment (VPS Service)
 
-## 📋 Requirements
+To deploy the PhishGuard AI backend and services on your VPS, follow these simple steps:
 
-- Python 3.10+
-- Node.js (for potential frontend/extension builds)
-- Google Chrome or Chromium-based browser
+### 🛠️ Prerequisites
+- Linux VPS (Ubuntu/Debian recommended)
+- Docker & Docker Compose (The deployment script will install them if missing)
 
-## 🚀 Installation & Setup
+### 📦 Installation
+Run the following command in your terminal:
 
-### 1. Clone the Project
 ```bash
-git clone https://github.com/NURJAKS/clean-phishguard.git
-cd clean-phishguard
+bash deploy.sh
 ```
 
-### 2. Backend Setup
+### ⚙️ Configuration
+The deployment will create a `.env` file in the root directory. **You MUST edit this file** to add your API keys:
+
 ```bash
-cd Agro_Phish/backend
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
+nano .env
 ```
+- `OPENAI_API_KEY`: Your OpenAI API key for advanced analysis.
+- `TELEGRAM_BOT_TOKEN`: Token for automated security alerts.
+- `TELEGRAM_CHAT_ID`: Your chat ID where notifications will be sent.
 
-### 3. Environment Variables (Recommended)
-Create a `.env` file in `Agro_Phish/backend/`:
-```env
-# Optional but highly recommended for full AI features
-GOOGLE_AI_API_KEY=your_google_ai_api_key_here
-OPENROUTER_API_KEY=your_openrouter_api_key_here
-```
+### 🌐 Accessing Services
+- **API (FastAPI):** `https://phishguard.ddns.net` (Mapped to port 8000)
+- **Dashboard (Streamlit):** `http://your-server-ip:8501`
 
-## ▶️ Running the Application
+---
 
-### Start the Backend API Server
-```bash
-cd Agro_Phish/backend
-source venv/bin/activate
-python3 -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
-*The API will be available at [http://localhost:8000](http://localhost:8000)*
+## 📦 Extension (Chrome/Edge)
 
-### Start the Analytics Dashboard (Optional)
-```bash
-cd Agro_Phish/dashboard
-# Ensure dependencies are installed: pip install -r requirements.txt
-streamlit run app.py --server.port 8501
-```
-*The dashboard will be available at [http://localhost:8501](http://localhost:8501)*
+The PhishGuard browser extension provides real-time protection for your browser.
 
-### Install the Browser Extension
-1. Open Google Chrome and navigate to `chrome://extensions/`
-2. Enable **Developer Mode** in the top right corner.
-3. Click **Load unpacked** and select the `Agro_Phish/extension/` directory.
-4. The PhishGuard AI shield icon will appear in your browser toolbar!
+### 🔧 Configuration
+The extension is pre-configured to prioritize the production domain `https://phishguard.ddns.net`. It also supports local development on port 8000.
+
+### 🛠️ Installation (Developer Mode)
+1.  Open Chrome and go to `chrome://extensions/`.
+2.  Enable **Developer mode** (top right).
+3.  Click **Load unpacked** and select the `Phish/extension` directory from this repository.
+
+### 🔒 Security Policies
+The extension uses a strict Content Security Policy (CSP) to ensure only authorized domains (PhishGuard API, Cloudflare, Google DNS, IpInfo) can communicate with it.
+
+---
+
+## 🛠️ Security Tools Integrated
+- **AI Analyzer:** Powered by OpenAI & Google AI.
+- **Nikto:** Web server vulnerability scanner.
+- **Masscan:** Ultra-fast port scanner (used for infrastructure mapping).
+- **Pinkerton:** Automated JS secret/vulnerability scanner.
+
+---
 
 ## 📜 License
-MIT License
+© 2026 PhishGuard Project. All rights reserved. For educational and cybersecurity research purposes only.
